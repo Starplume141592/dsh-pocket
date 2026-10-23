@@ -6,7 +6,7 @@
 $ErrorActionPreference = 'Stop'
 
 $urls = @(
-  'https://github.com/Starplume141592/dsh-pocket/releases/download/native-test/PocketHost.zip',
+  'https://github.com/Starplume141592/dsh-pocket/releases/download/v0.5.0/PocketHost.zip',
   'https://pocket.taila66dc2.ts.net/__dshapp/release/PocketHost.zip'
 )
 
