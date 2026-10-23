@@ -1,0 +1,18 @@
+{
+  "version": "0.4.0-dev",
+  "channel": "dev",
+  "publicUrl": "https://suited-protein-break-globe.trycloudflare.com",
+  "appPath": "/__dshapp/",
+  "apkUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/v0.4.0/Pocket-0.4.0-debug.apk",
+  "repoUrl": "https://github.com/Starplume141592/dsh-pocket",
+  "updatedAt": "2026-10-23T15:40:00Z",
+  "entryHint": "当前是 Cloudflare 临时隧道，地址会在隧道重启后变化；稳定 Funnel 证书签下来后只需改这个 config.json。",
+  "notes": [
+    "离线快照 120 条消息 / 300 KB / 12 个会话，断网可翻页",
+    "加载更早：每页 10 / 20 / 40 条，保持滚动位置",
+    "主题色（4 种）、紧凑模式、活动页显隐",
+    "移动端总开关：随时停/启网关、通知、隧道",
+    "审批、token 流式、系统通知、PWA 安装",
+    "Android debug APK（app.pocket.dsh 0.4.0）"
+  ]
+}

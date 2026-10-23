@@ -1,0 +1,122 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build web assets
+        run: node scripts/build-mobile-web.mjs .
+
+      - name: Install Capacitor
+        working-directory: mobile
+        run: npm ci
+
+      - name: Sync Android project
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Name artifact and checksum
+        run: |
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "Pocket-${{ github.ref_name }}-debug.apk"
+          sha256sum "Pocket-${{ github.ref_name }}-debug.apk" > "Pocket-${{ github.ref_name }}-debug.apk.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pocket-apk
+          path: |
+            Pocket-${{ github.ref_name }}-debug.apk
+            Pocket-${{ github.ref_name }}-debug.apk.sha256
+          if-no-files-found: error
+
+  sidecar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sidecar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Resolve dependencies
+        run: go mod tidy
+      - name: Build windows/amd64
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags "-s -w" -o tsnet-sidecar.exe .
+      - name: Checksum
+        run: sha256sum tsnet-sidecar.exe > tsnet-sidecar.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsnet-sidecar
+          path: |
+            sidecar/tsnet-sidecar.exe
+            sidecar/tsnet-sidecar.exe.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: [android, sidecar]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pocket-apk
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: tsnet-sidecar
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/Pocket-${{ github.ref_name }}-debug.apk
+            release-assets/Pocket-${{ github.ref_name }}-debug.apk.sha256
+            release-assets/tsnet-sidecar.exe
+            release-assets/tsnet-sidecar.exe.sha256
+          body: |
+            Pocket ${{ github.ref_name }} — DSH 手机伴生 App。
+
+            - Android debug APK（`app.pocket.dsh`）
+            - 内嵌 Funnel sidecar（Windows amd64）
+            - 安装与连接说明见 https://github.com/${{ github.repository }}#readme
+
+            debug 签名仅供测试；正式 release 会换签名。
