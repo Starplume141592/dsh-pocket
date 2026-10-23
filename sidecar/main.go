@@ -33,13 +33,14 @@ import (
 var authURLPattern = regexp.MustCompile(`https://login\.tailscale\.com/[a-z]/[A-Za-z0-9_-]+`)
 
 type status struct {
-	mu        sync.Mutex
-	phase     string
-	hostname  string
-	authURL   string
-	funnelURL string
-	errText   string
-	started   time.Time
+	mu         sync.Mutex
+	phase      string
+	hostname   string
+	authURL    string
+	funnelURL  string
+	tailnetURL string
+	errText    string
+	started    time.Time
 }
 
 func newStatus(hostname string) *status {
@@ -56,26 +57,28 @@ func (s *status) snapshot() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return map[string]any{
-		"ok":        s.errText == "",
-		"phase":     s.phase,
-		"hostname":  s.hostname,
-		"authURL":   s.authURL,
-		"funnelURL": s.funnelURL,
-		"error":     s.errText,
-		"startedAt": s.started.UTC().Format(time.RFC3339),
-		"pid":       os.Getpid(),
+		"ok":         s.errText == "",
+		"phase":      s.phase,
+		"hostname":   s.hostname,
+		"authURL":    s.authURL,
+		"funnelURL":  s.funnelURL,
+		"tailnetURL": s.tailnetURL,
+		"error":      s.errText,
+		"startedAt":  s.started.UTC().Format(time.RFC3339),
+		"pid":        os.Getpid(),
 	}
 }
 
 func main() {
 	var (
-		listenAddr = flag.String("listen", "127.0.0.1:8479", "控制接口监听地址")
-		target     = flag.String("target", "http://127.0.0.1:8470", "本机网关地址")
-		hostname   = flag.String("hostname", "pocket", "在 tailnet 里的主机名")
-		stateDir   = flag.String("dir", "", "tsnet 状态目录（默认用户配置目录下 dsh-mobile/tsnet）")
-		authKey    = flag.String("authkey", "", "Tailscale auth key（可选，不填走交互登录）")
-		funnelAddr = flag.String("funnel", ":443", "Funnel 监听地址（tsnet 虚拟端口）")
-		logPath    = flag.String("log", "", "日志文件（可选）")
+		listenAddr  = flag.String("listen", "127.0.0.1:8479", "控制接口监听地址")
+		target      = flag.String("target", "http://127.0.0.1:8470", "本机网关地址")
+		hostname    = flag.String("hostname", "pocket", "在 tailnet 里的主机名")
+		stateDir    = flag.String("dir", "", "tsnet 状态目录（默认用户配置目录下 dsh-mobile/tsnet）")
+		authKey     = flag.String("authkey", "", "Tailscale auth key（可选，不填走交互登录）")
+		funnelAddr  = flag.String("funnel", "", "Funnel 监听地址（留空表示不公开到公网）")
+		tailnetAddr = flag.String("tailnet", ":8443", "仅 tailnet 内可达的 HTTPS 监听地址")
+		logPath     = flag.String("log", "", "日志文件（可选）")
 	)
 	flag.Parse()
 
@@ -131,17 +134,6 @@ func main() {
 			return
 		}
 
-		ln, err := srv.ListenFunnel("tcp", *funnelAddr)
-		if err != nil {
-			msg := "开启 Funnel 失败: " + err.Error()
-			if strings.Contains(strings.ToLower(err.Error()), "funnel") {
-				msg += "（到 https://login.tailscale.com/f/funnel 开启 HTTPS 和 Funnel）"
-			}
-			fail(st, msg)
-			return
-		}
-		defer ln.Close()
-
 		// 证书域名偶尔要等一两秒才就绪。
 		var domain string
 		for i := 0; i < 20; i++ {
@@ -152,20 +144,59 @@ func main() {
 			time.Sleep(500 * time.Millisecond)
 		}
 		if domain == "" {
-			fail(st, "没有拿到 Funnel 域名（确认 tailnet 已开启 HTTPS 证书）")
+			fail(st, "没有拿到 Tailscale 域名（确认 tailnet 已开启 HTTPS 证书）")
 			return
 		}
 
-		link := "https://" + domain
-		st.update(func(s *status) {
-			s.phase = "serving"
-			s.funnelURL = link
-			s.errText = ""
-		})
-		log.Printf("Funnel 已就绪: %s -> %s", link, *target)
+		served := false
+		if *tailnetAddr != "" {
+			ln, err := srv.ListenTLS("tcp", *tailnetAddr)
+			if err != nil {
+				fail(st, "开启 tailnet 监听失败: "+err.Error())
+				return
+			}
+			link := "https://" + domain + portSuffix(*tailnetAddr)
+			st.update(func(s *status) {
+				s.phase = "serving"
+				s.tailnetURL = link
+				s.errText = ""
+			})
+			log.Printf("tailnet 已就绪: %s -> %s", link, *target)
+			served = true
+			go func() {
+				if err := http.Serve(ln, newProxy(*target, true)); err != nil {
+					fail(st, "tailnet 服务退出: "+err.Error())
+				}
+			}()
+		}
 
-		if err := http.Serve(ln, newProxy(*target)); err != nil {
-			fail(st, "Funnel 服务退出: "+err.Error())
+		if *funnelAddr != "" {
+			ln, err := srv.ListenFunnel("tcp", *funnelAddr)
+			if err != nil {
+				msg := "开启 Funnel 失败: " + err.Error()
+				if strings.Contains(strings.ToLower(err.Error()), "funnel") {
+					msg += "（到 https://login.tailscale.com/f/funnel 开启 HTTPS 和 Funnel）"
+				}
+				fail(st, msg)
+				return
+			}
+			link := "https://" + domain
+			st.update(func(s *status) {
+				s.phase = "serving"
+				s.funnelURL = link
+				s.errText = ""
+			})
+			log.Printf("Funnel 已就绪: %s -> %s", link, *target)
+			served = true
+			go func() {
+				if err := http.Serve(ln, newProxy(*target, false)); err != nil {
+					fail(st, "Funnel 服务退出: "+err.Error())
+				}
+			}()
+		}
+
+		if !served {
+			fail(st, "没有启用任何监听（tailnet/funnel 都为空）")
 		}
 	}()
 
@@ -217,9 +248,18 @@ func serveControl(addr string, st *status) {
 	}()
 }
 
+func portSuffix(addr string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" || port == "443" {
+		return ""
+	}
+	return ":" + port
+}
+
 // newProxy 反代到本机网关。网关靠 X-Forwarded-Proto 给设备 cookie 加 Secure，
 // 靠 X-Forwarded-For 记录真实设备地址；这两个头必须由 sidecar 覆盖，不能让客户端伪造。
-func newProxy(raw string) http.Handler {
+// tailnet 入口额外带 X-Pocket-Tailnet，网关据此免配对；公网入口必须剥掉这个头。
+func newProxy(raw string, tailnet bool) http.Handler {
 	u, err := url.Parse(raw)
 	if err != nil {
 		log.Fatalf("网关地址不合法 %q: %v", raw, err)
@@ -231,6 +271,11 @@ func newProxy(raw string) http.Handler {
 		director(req)
 		req.Header.Set("X-Forwarded-Proto", "https")
 		req.Header.Set("X-Forwarded-Host", req.Host)
+		if tailnet {
+			req.Header.Set("X-Pocket-Tailnet", "1")
+		} else {
+			req.Header.Del("X-Pocket-Tailnet")
+		}
 		if host, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 			req.Header.Set("X-Forwarded-For", host)
 		}

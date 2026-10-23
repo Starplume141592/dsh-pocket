@@ -472,6 +472,17 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     assert.equal(fileOrigin.status, 200, 'file origin');
   });
 
+  await t.test('tailnet 入口自动建配对设备', async () => {
+    const res = await phoneFetch(harness, '/__dshapp/', {
+      headers: { 'x-pocket-tailnet': '1' },
+    });
+    assert.equal(res.status, 200);
+    const cookie = res.headers.get('set-cookie') ?? '';
+    assert.match(cookie, /dshm_device=/);
+    const state = await desktopFetch(harness, '/state');
+    assert.ok(state.body.devices.some((d) => d.name === 'Pocket (tailnet)'));
+  });
+
   await t.test('吊销设备后立即失效', async () => {
     const devices = await desktopFetch(harness, '/state');
     const target = devices.body.devices[0];

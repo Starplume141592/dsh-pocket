@@ -309,6 +309,12 @@ export function createMobileGateway({
     return device;
   }
 
+  // tailnet 入口由 sidecar 注入这个头；只有 loopback 能伪造，等同于本机信任。
+  // 第一次访问自动建一台设备并下发 cookie，不再需要二维码/配对码。
+  function isTailnetRequest(req) {
+    return req.headers['x-pocket-tailnet'] === '1' && isLoopbackAddress(req.socket.remoteAddress ?? '');
+  }
+
   function isDesktopRequest(req) {
     if (!isLoopbackAddress(req.socket.remoteAddress ?? '')) return false;
     const origin = req.headers.origin;
@@ -633,6 +639,17 @@ export function createMobileGateway({
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${listeningPort || port}`);
     const pathname = url.pathname;
 
+    // tailnet-only entry: trust the sidecar and mint a device on first contact.
+    if (isTailnetRequest(req) && !authenticate(req)) {
+      try {
+        const created = store.addDevice({ name: 'Pocket (tailnet)', platform: 'tailscale', ip: clientIp(req) });
+        setDeviceCookie(req, res, created.device.id, created.token);
+        req.pocketDevice = created.device;
+      } catch {
+        /* fall through to the normal auth check */
+      }
+    }
+
     if (pathname === '/__dshm/health') {
       return json(res, 200, { ok: true, version, upstream: upstream.origin });
     }
@@ -705,7 +722,7 @@ export function createMobileGateway({
       return json(res, 200, { ok: true });
     }
 
-    const device = authenticate(req);
+    let device = authenticate(req) || req.pocketDevice || null;
     if (!device) {
       if (wantsHtml(req) || (req.method === 'GET' && pathname === '/')) return proxyAuthFailure(res);
       return json(res, 401, { ok: false, error: 'unauthorized' });

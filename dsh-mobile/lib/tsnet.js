@@ -56,6 +56,7 @@ export function createTsnetManager({
     phase: 'stopped',
     authURL: '',
     funnelURL: '',
+    tailnetURL: '',
     error: '',
     startedAt: 0,
     pid: 0,
@@ -101,6 +102,7 @@ export function createTsnetManager({
         }
       }
     }
+    if (typeof body.tailnetURL === 'string') state.tailnetURL = body.tailnetURL;
     note();
   }
 
