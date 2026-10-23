@@ -52,9 +52,10 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - Gateway 新增 `/__dshapp/` 静态路由，可直接从公网 HTTPS 地址安装 PWA
 - Web Push 系统通知：Pocket 子路径 SW 订阅，测试通知 sent=1 / failed=0
 - 网关上游 cookie 过期后自动刷新并重试一次（含 POST 请求体）
-- 网关 49 项单测 + App 31 项传输/时间线/离线缓存/偏好测试通过
+- 网关 50 项单测 + App 31 项传输/时间线/离线缓存/偏好测试通过
 
-**还在进行**：release 签名 APK、局域网/外网连接方式切换、内嵌 tsnet Funnel（sidecar 已编译，等一次 Tailscale 登录）。
+**还在进行**：release 签名 APK、局域网/外网连接方式切换、内嵌 tsnet Funnel 的 HTTPS 证书
+（sidecar 已编译并登录，ACME 证书还在重试；临时 Cloudflare 隧道已可用）。
 debug APK 已构建：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 （4.2 MB，包名 `app.pocket.dsh`，versionName 0.4.0）。
 Android WebView 的 Web Push 不保证可用；系统级通知需要后续接 FCM 或原生通知桥。

@@ -1,11 +1,11 @@
 # v0.4-dev 验证记录
 
 > 时间：2026-10-23 23:10（Asia/Shanghai）
-> 环境：DSH Electron（GUI 65534）、dsh-mobile 网关 8470、Pocket 预览 8788
+> 环境：DSH Electron（GUI 14104）、dsh-mobile 网关 8470、Pocket 预览 8788
 
 ## 1. 网关与协议
 
-- 网关健康检查：200，version=0.2.0，upstream=http://127.0.0.1:65534
+- 网关健康检查：200，version=0.2.0，upstream=http://127.0.0.1:14104
 - session/list：返回 70+ 条真实会话，包含 title / running / projections
 - session/follow：首帧 snapshot（cursor + records + projections），之后 event 帧
 - session/page：`throughSeq` 为包含上界，`maxMessages` 控制消息数；旧页通过
@@ -70,8 +70,8 @@ node --test --test-isolation=none --test-force-exit \
   tests/store.test.mjs tests/tunnel.test.mjs tests/notify.test.mjs \
   tests/tsnet.test.mjs tests/upstream-retry.test.mjs
 
-tests 49 gateway + 31 app
-pass 80
+tests 50 gateway + 31 app
+pass 81
 fail 0
 ~~~
 
@@ -160,6 +160,20 @@ assets/public/{app,cache,prefs,timeline}.js 已打进 APK
 产物：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 （另一份 `dist/Pocket-0.4.0-debug.apk`，不提交）。
 
+## 5.6 公网入口与配对（23:30）
+
+- Tailscale 节点 `pocket` 登录成功，tsnet sidecar `phase=serving`，
+  `funnelURL=https://pocket.taila66dc2.ts.net`。
+- 但 ACME DNS-01 的 `SetDNS` 调用超时，证书一直 `tls-cert-pending`，该地址暂时打不开。
+- Cloudflare 临时隧道可用：`https://suited-protein-break-globe.trycloudflare.com`
+  - 公网 DNS 解析 + TLS 探针返回 200：
+    `{"ok":true,"version":"0.2.0","upstream":"http://127.0.0.1:14104"}`
+  - 手机已扫码配对，设备「手机」在线，Pocket 成功进入。
+- 设置卡二维码 403：插件卡片可能是沙箱 iframe，`Origin` 为 `null`；
+  已放宽 `isDesktopRequest`（`null` 或任意 loopback origin），下次重启生效。
+  本次用手动生成的二维码完成配对。
+- 测试：网关 21（新增 Origin 1 项），总 **81/81**。
+
 网关新增覆盖：
 
 - /__dshapp/ 外壳可访问（未配对也可打开）
@@ -177,6 +191,9 @@ assets/public/{app,cache,prefs,timeline}.js 已打进 APK
 - 离线快照用 localStorage，保留最近 120 条 / 300 KB / 12 个会话；离线翻页只在这个窗口内。
 - 第三方扩展只有设计稿（`docs/product/PLUGINS.md`），扩展宿主还没实现。
 - 拆分 core/pocket 两个插件包还没落地，当前仍是单个 `dsh-mobile`。
+- Funnel 节点已登录，但 HTTPS 证书仍在 ACME 重试（`SetDNS` 超时）；当前靠临时
+  trycloudflare 隧道，重启 cloudflared 后地址会变。
+- 设置卡二维码的 Origin 修复已装进 profile，但要下次重启 DSH 才生效；当前可用手动配对链接。
 
 ## 7. 复现
 
