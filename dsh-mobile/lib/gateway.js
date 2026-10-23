@@ -24,6 +24,7 @@ const COOKIE_NAME = 'dshm_device';
 const PAIRING_TTL_MS = 5 * 60 * 1000;
 const PAIRING_KEEP_MS = 30 * 60 * 1000;
 const MAX_BODY = 64 * 1024;
+const MAX_REPLAY_BODY = 1024 * 1024;
 const VERSION = '0.2.0';
 
 const MIME = {
@@ -191,7 +192,9 @@ export function createMobileGateway({
   version = VERSION,
   push = null,
   tunnel = null,
+  tsnet = null,
   notifyExternal = '',
+  setMobileEnabled = null,
 }) {
   let server = null;
   let listeningPort = 0;
@@ -337,7 +340,9 @@ export function createMobileGateway({
       // Do not impose an idle timeout on streaming responses (SSE / long-running turns).
       // The client close handler owns cancellation instead.
       req.setTimeout(0);
-      if (body) {
+      if (Buffer.isBuffer(body)) {
+        req.end(body);
+      } else if (body) {
         body.on('error', () => req.destroy());
         body.pipe(req);
       } else {
@@ -421,12 +426,35 @@ export function createMobileGateway({
       req.method !== 'GET' &&
       req.method !== 'HEAD' &&
       (req.headers['content-length'] !== undefined || req.headers['transfer-encoding'] !== undefined);
-    let upstreamRes = await requestUpstream(req.method ?? 'GET', req.url ?? '/', headers, hasBody ? req : undefined);
-    if (upstreamRes.statusCode === 401 && (req.method === 'GET' || req.method === 'HEAD')) {
+    // Buffer small JSON bodies so a 401 (expired upstream cookie) can be replayed
+    // once after refreshing the launch-token cookie. Larger/streamed bodies keep
+    // the old streaming path and are not retried.
+    let replayBody = null;
+    if (hasBody) {
+      const declared = Number(req.headers['content-length']);
+      if (Number.isFinite(declared) && declared >= 0 && declared <= MAX_REPLAY_BODY) {
+        try {
+          replayBody = await collect(req);
+        } catch {
+          res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('request body aborted');
+          return;
+        }
+        headers['content-length'] = String(replayBody.length);
+        delete headers['transfer-encoding'];
+      }
+    }
+    let upstreamRes = await requestUpstream(
+      req.method ?? 'GET',
+      req.url ?? '/',
+      headers,
+      replayBody ?? (hasBody ? req : undefined),
+    );
+    if (upstreamRes.statusCode === 401 && (!hasBody || replayBody)) {
       upstreamRes.resume();
       await upstream.refresh();
       headers.cookie = upstream.cookie;
-      upstreamRes = await requestUpstream(req.method, req.url ?? '/', headers);
+      upstreamRes = await requestUpstream(req.method ?? 'GET', req.url ?? '/', headers, replayBody ?? undefined);
     }
 
     const status = upstreamRes.statusCode ?? 502;
@@ -733,7 +761,19 @@ export function createMobileGateway({
     if (req.method === 'GET' && route === '/state') {
       return json(res, 200, desktopState());
     }
+    if (req.method === 'POST' && route === '/mobile/enable') {
+      const body = await readJson(req).catch(() => null);
+      if (!body || typeof body.enabled !== 'boolean') return json(res, 400, { ok: false, error: 'bad-request' });
+      if (typeof setMobileEnabled !== 'function') return json(res, 503, { ok: false, error: 'not-supported' });
+      try {
+        await setMobileEnabled(body.enabled);
+        return json(res, 200, { ok: true, state: desktopState() });
+      } catch (error) {
+        return json(res, 500, { ok: false, error: String(error?.message ?? error) });
+      }
+    }
     if (req.method === 'POST' && route === '/pair/start') {
+      if (!store.settings.mobile.enabled) return json(res, 409, { ok: false, error: '手机端已停用，请先启用' });
       return json(res, 200, { ok: true, pairing: startPairing() });
     }
     if (req.method === 'POST' && route === '/pair/decide') {
@@ -767,6 +807,9 @@ export function createMobileGateway({
       }
       if (body.tunnel && typeof body.tunnel === 'object') {
         store.updateSettings({ tunnel: body.tunnel });
+      }
+      if (body.tsnet && typeof body.tsnet === 'object') {
+        store.updateSettings({ tsnet: body.tsnet });
       }
       if (pairing) pairing.url = pairingUrl(pairing);
       return json(res, 200, { ok: true, state: desktopState() });
@@ -811,6 +854,21 @@ export function createMobileGateway({
       if (!tunnel) return json(res, 503, { ok: false, error: '隧道模块不可用' });
       await tunnel.stop();
       return json(res, 200, { ok: true, tunnel: tunnel.status(), state: desktopState() });
+    }
+    if (req.method === 'POST' && route === '/tsnet/start') {
+      if (!tsnet) return json(res, 503, { ok: false, error: '内嵌 Funnel 模块不可用' });
+      try {
+        store.updateSettings({ tsnet: { enabled: true } });
+        await tsnet.start();
+        return json(res, 200, { ok: true, tsnet: tsnet.status(), state: desktopState() });
+      } catch (error) {
+        return json(res, 400, { ok: false, error: String(error?.message ?? error), tsnet: tsnet.status() });
+      }
+    }
+    if (req.method === 'POST' && route === '/tsnet/stop') {
+      if (!tsnet) return json(res, 503, { ok: false, error: '内嵌 Funnel 模块不可用' });
+      await tsnet.stop();
+      return json(res, 200, { ok: true, tsnet: tsnet.status(), state: desktopState() });
     }
     if (req.method === 'POST' && route === '/probe') {
       const target = publicUrl();
@@ -863,6 +921,7 @@ export function createMobileGateway({
       running: server !== null,
       port: listeningPort || port,
       bind: activeBind,
+      mobile: { enabled: store.settings.mobile.enabled },
       lan: store.settings.lan,
       lanUrl,
       publicUrl: publicUrl(),
@@ -876,6 +935,7 @@ export function createMobileGateway({
         subscriptions: push?.count() ?? 0,
       },
       tunnel: tunnel ? tunnel.status() : null,
+      tsnet: tsnet ? tsnet.status() : null,
       devices: store.listDevices().map((device) => ({
         ...device,
         online: now - (device.lastSeen ?? 0) < 90_000,

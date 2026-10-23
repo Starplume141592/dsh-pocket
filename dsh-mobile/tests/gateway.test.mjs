@@ -80,8 +80,8 @@ function startUpstream() {
   });
 }
 
-function startHarness({ store, upstream, upstreamPort, push = null, tunnel = null }) {
-  const gateway = createMobileGateway({ upstream, store, port: 0, bind: '127.0.0.1', push, tunnel });
+function startHarness({ store, upstream, upstreamPort, push = null, tunnel = null, tsnet = null, setMobileEnabled = null }) {
+  const gateway = createMobileGateway({ upstream, store, port: 0, bind: '127.0.0.1', push, tunnel, tsnet, setMobileEnabled });
   return gateway.start().then(() => {
     const main = http.createServer((req, res) => {
       if (String(req.url ?? '').startsWith('/plugins/dsh-mobile/api')) {
@@ -176,7 +176,30 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     },
     status: () => ({ ...tunnelState }),
   };
-  const harness = await startHarness({ store, upstream, upstreamPort, push: fakePush, tunnel: fakeTunnel });
+  const tsnetState = {
+    running: false,
+    phase: 'stopped',
+    authURL: '',
+    funnelURL: '',
+    error: '',
+    available: true,
+    hostname: 'pocket',
+    autoStart: false,
+  };
+  const fakeTsnet = {
+    start: async () => {
+      tsnetState.running = true;
+      tsnetState.phase = 'serving';
+      return { ...tsnetState };
+    },
+    stop: async () => {
+      tsnetState.running = false;
+      tsnetState.phase = 'stopped';
+      return { ...tsnetState };
+    },
+    status: () => ({ ...tsnetState, enabled: store.settings.tsnet.enabled }),
+  };
+  const harness = await startHarness({ store, upstream, upstreamPort, push: fakePush, tunnel: fakeTunnel, tsnet: fakeTsnet });
   const { gateway, mainPort, main } = harness;
 
   t.after(async () => {
@@ -411,6 +434,20 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     assert.equal(stopped.body.tunnel.running, false);
   });
 
+  await t.test('内嵌 Funnel API', async () => {
+    const before = await desktopFetch(harness, '/state');
+    assert.equal(before.body.tsnet.enabled, false);
+    const started = await desktopFetch(harness, '/tsnet/start', { method: 'POST', body: '{}' });
+    assert.equal(started.status, 200);
+    assert.equal(started.body.tsnet.running, true);
+    assert.equal(store.settings.tsnet.enabled, true, 'start 应记住启用状态');
+    const state = await desktopFetch(harness, '/state');
+    assert.equal(state.body.tsnet.running, true);
+    const stopped = await desktopFetch(harness, '/tsnet/stop', { method: 'POST', body: '{}' });
+    assert.equal(stopped.status, 200);
+    assert.equal(stopped.body.tsnet.running, false);
+  });
+
   await t.test('吊销设备后立即失效', async () => {
     const devices = await desktopFetch(harness, '/state');
     const target = devices.body.devices[0];
@@ -420,4 +457,43 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     const res = await phoneFetch(harness, '/', { headers: { cookie } });
     assert.equal(res.status, 401);
   });
+});
+
+test('手机端总开关会调用控制器并阻止新的配对', async () => {
+  const upstreamServer = await startUpstream();
+  const upstream = createUpstream({
+    origin: `http://127.0.0.1:${upstreamServer.port}`,
+    authenticatedUrl: (url) => url + '?token=secret',
+    log: () => {},
+  });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-gw-mobile-'));
+  const store = createStore(dir);
+  const calls = [];
+  const harness = await startHarness({
+    store,
+    upstream,
+    upstreamPort: upstreamServer.port,
+    setMobileEnabled: async (enabled) => {
+      calls.push(enabled);
+      store.updateSettings({ mobile: { enabled } });
+    },
+  });
+  try {
+    const before = await desktopFetch(harness, '/state');
+    assert.equal(before.status, 200);
+    assert.equal(before.body.mobile.enabled, true);
+
+    const off = await desktopFetch(harness, '/mobile/enable', { method: 'POST', body: JSON.stringify({ enabled: false }) });
+    assert.equal(off.status, 200);
+    assert.deepEqual(calls, [false]);
+    assert.equal(off.body.state.mobile.enabled, false);
+
+    const pair = await desktopFetch(harness, '/pair/start', { method: 'POST', body: '{}' });
+    assert.equal(pair.status, 409);
+  } finally {
+    await harness.gateway.stop();
+    harness.main.close();
+    upstreamServer.server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

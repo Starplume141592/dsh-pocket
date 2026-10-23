@@ -60,6 +60,9 @@ window.__ModuleLoader__.load({
         "用手机浏览器扫码配对，之后可把 DSH 安装到主屏幕，像 App 一样使用电脑上的完整 DSH：会话、输入、审批、文件与设置。电脑端无需开放公网端口，推荐用 Cloudflare Tunnel 绑定自己的域名。",
       running: "网关运行中（端口 {port}）",
       stopped: "网关未运行",
+      mobileEnable: "启用手机端",
+      mobileHint: "关闭后网关、通知、隧道、内嵌 Funnel 全部停止；桌面设置卡仍可用，随时可以再打开。",
+      mobileDisabled: "手机端已停用。打开上面的开关后，再生成配对二维码。",
       reachable: "手机可达地址",
       unreachable:
         "当前网关只监听 127.0.0.1，手机无法直接访问。请先填写公网地址，或在插件配置里把 bind 改为 0.0.0.0（仅限可信局域网）。",
@@ -111,6 +114,23 @@ window.__ModuleLoader__.load({
       tunnelStopped: "隧道未运行",
       tunnelNoBin: "没找到 cloudflared：把 cloudflared.exe 放到数据目录的 bin 下，或运行 install.ps1。",
       tunnelChangeHint: "地址变化后，已安装的手机 App 需要重新扫码配对。",
+      tsnetTitle: "内嵌 Funnel（免安装）",
+      tsnetHint:
+        "在插件里跑一个用户态 Tailscale 节点，给手机一个固定 HTTPS 地址；不用装 Tailscale、不用管理员、不用开端口。首次启用要扫码登录 Tailscale，并在控制台开一次 HTTPS + Funnel。",
+      tsnetEnable: "启用内嵌 Funnel",
+      tsnetStart: "启动",
+      tsnetStop: "停止",
+      tsnetLogin: "打开登录页",
+      tsnetNoBin: "没找到 tsnet-sidecar：把它放到数据目录的 bin 下，或用 sidecar workflow 构建一个。",
+      tsnetFirstRun: "第一次用：先点「启动」，出现登录链接后用浏览器登录；再到控制台开启 HTTPS 和 Funnel，地址会自动回填。",
+      tsnetHostHint: "主机名 {host}，对应 https://{host}.<tailnet>.ts.net；想换名改 state.json 的 tsnet.hostname。",
+      tsnetPhaseStarting: "正在启动…",
+      tsnetPhaseConnecting: "正在连接 Tailscale…",
+      tsnetPhaseNeedLogin: "等待登录 Tailscale",
+      tsnetPhaseServing: "Funnel 运行中",
+      tsnetPhaseError: "启动失败",
+      tsnetPhaseStopped: "未运行",
+      tsnetAuto: "DSH 启动时自动启动内嵌 Funnel",
       notifyTitle: "手机通知",
       notifyHint: "任务完成、等待批准、运行失败时推送到手机。需要 HTTPS 公网地址，并在手机上允许通知。",
       notifyExternal: "检测到 meow-smooth，通知由它发送（避免重复推送）。",
@@ -128,6 +148,9 @@ window.__ModuleLoader__.load({
         "Scan with your phone to pair, then add DSH to your home screen and use the full desktop DSH — sessions, input, approvals, files and settings. No public port needed on the PC; a Cloudflare Tunnel with your own domain is recommended.",
       running: "Gateway running (port {port})",
       stopped: "Gateway is not running",
+      mobileEnable: "Enable mobile",
+      mobileHint: "Turning this off stops the gateway, notifications, tunnel and embedded Funnel. This settings card stays available.",
+      mobileDisabled: "Mobile is off. Turn the switch on, then generate a new pairing QR code.",
       reachable: "Phone-reachable address",
       unreachable:
         "The gateway only listens on 127.0.0.1, so a phone cannot reach it. Set a public URL, or set bind to 0.0.0.0 for a trusted LAN.",
@@ -179,6 +202,23 @@ window.__ModuleLoader__.load({
       tunnelStopped: "Tunnel stopped",
       tunnelNoBin: "cloudflared not found: put cloudflared.exe under the data dir's bin/, or run install.ps1.",
       tunnelChangeHint: "When the URL changes, the installed phone app has to pair again.",
+      tsnetTitle: "Embedded Funnel (no install)",
+      tsnetHint:
+        "Run a userspace Tailscale node inside the plugin and give the phone a fixed HTTPS URL. No Tailscale install, no admin rights, no open ports. First run needs a Tailscale login and a one-time HTTPS + Funnel enable in the admin console.",
+      tsnetEnable: "Enable embedded Funnel",
+      tsnetStart: "Start",
+      tsnetStop: "Stop",
+      tsnetLogin: "Open login page",
+      tsnetNoBin: "tsnet-sidecar not found: put it under the data dir's bin/, or build it with the sidecar workflow.",
+      tsnetFirstRun: "First run: click Start, open the login link in a browser, then enable HTTPS and Funnel in the admin console; the URL is filled in automatically.",
+      tsnetHostHint: "Hostname {host} gives https://{host}.<tailnet>.ts.net; change tsnet.hostname in state.json to rename.",
+      tsnetPhaseStarting: "Starting…",
+      tsnetPhaseConnecting: "Connecting to Tailscale…",
+      tsnetPhaseNeedLogin: "Waiting for Tailscale login",
+      tsnetPhaseServing: "Funnel running",
+      tsnetPhaseError: "Start failed",
+      tsnetPhaseStopped: "Stopped",
+      tsnetAuto: "Start embedded Funnel when DSH starts",
       notifyTitle: "Phone notifications",
       notifyHint: "Push task completion, pending approvals and failures to the phone. Requires an HTTPS public URL and notification permission on the phone.",
       notifyExternal: "meow-smooth is installed and provides notifications (avoids duplicates).",
@@ -387,6 +427,12 @@ window.__ModuleLoader__.load({
         });
       }
 
+      function toggleMobile(enabled) {
+        run(function () {
+          return api("/mobile/enable", { method: "POST", body: JSON.stringify({ enabled: enabled }) });
+        });
+      }
+
       function testNotify() {
         setBusy(true);
         setNotifyResult(null);
@@ -406,6 +452,28 @@ window.__ModuleLoader__.load({
         run(function () {
           return api("/tunnel/" + action, { method: "POST", body: "{}" });
         });
+      }
+
+      function tsnetAction(action) {
+        run(function () {
+          return api("/tsnet/" + action, { method: "POST", body: "{}" });
+        });
+      }
+
+      function tsnetPhase(phase) {
+        var key =
+          phase === "starting"
+            ? "tsnetPhaseStarting"
+            : phase === "connecting"
+              ? "tsnetPhaseConnecting"
+              : phase === "need-login"
+                ? "tsnetPhaseNeedLogin"
+                : phase === "serving"
+                  ? "tsnetPhaseServing"
+                  : phase === "error"
+                    ? "tsnetPhaseError"
+                    : "tsnetPhaseStopped";
+        return t(key);
       }
 
       function copyLink(url) {
@@ -448,11 +516,37 @@ window.__ModuleLoader__.load({
       var qrSrc = pairing && pairing.token ? "/plugins/dsh-mobile/api/qr?token=" + encodeURIComponent(pairing.token) + "&v=" + pairing.expiresAt : null;
       var tunnelState = state.tunnel || null;
       var tunnelMode = tunnelState ? tunnelState.mode : "off";
+      var tsnetState = state.tsnet || null;
+      var mobileEnabled = !state.mobile || state.mobile.enabled !== false;
+      var mobileSwitch = h(
+        "label",
+        { className: "__dm_row", style: { gap: "8px", cursor: "pointer", alignItems: "center" } },
+        h("input", {
+          type: "checkbox",
+          checked: mobileEnabled,
+          disabled: busy,
+          onChange: function (e) { toggleMobile(e.target.checked); },
+        }),
+        h("span", { className: "__dm_hint" }, t("mobileEnable")),
+      );
+
+      if (!mobileEnabled) {
+        return h(
+          "div",
+          { className: "__dm_root" },
+          h("p", { className: "__dm_hint" }, t("intro")),
+          mobileSwitch,
+          h("p", { className: "__dm_hint" }, t("mobileHint")),
+          h("p", { className: "__dm_hint" }, t("mobileDisabled")),
+        );
+      }
 
       return h(
         "div",
         { className: "__dm_root" },
         h("p", { className: "__dm_hint" }, t("intro")),
+        mobileSwitch,
+        h("p", { className: "__dm_hint" }, t("mobileHint")),
         h(
           "div",
           { className: "__dm_row" },
@@ -592,6 +686,90 @@ window.__ModuleLoader__.load({
           : null,
         tunnelState && tunnelState.error ? h("p", { className: "__dm_err" }, tunnelState.error) : null,
         tunnelMode === "quick" && tunnelState && tunnelState.running ? h("p", { className: "__dm_hint" }, t("tunnelChangeHint")) : null,
+        tsnetState ? h("p", { className: "__dm_title" }, t("tsnetTitle")) : null,
+        tsnetState ? h("p", { className: "__dm_hint" }, t("tsnetHint")) : null,
+        tsnetState
+          ? h(
+              "label",
+              { className: "__dm_row", style: { gap: "8px", cursor: "pointer", alignItems: "center" } },
+              h("input", {
+                type: "checkbox",
+                checked: Boolean(tsnetState.enabled),
+                onChange: function (e) {
+                  saveSettings({ tsnet: { enabled: e.target.checked } });
+                },
+              }),
+              h("span", { className: "__dm_hint" }, t("tsnetEnable")),
+            )
+          : null,
+        tsnetState && tsnetState.enabled
+          ? h(
+              "div",
+              { className: "__dm_row" },
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "__dm_btn" + (tsnetState.running ? "" : " __dm_primary"),
+                  disabled: busy || !tsnetState.available,
+                  onClick: function () {
+                    tsnetAction(tsnetState.running ? "stop" : "start");
+                  },
+                },
+                tsnetState.running ? t("tsnetStop") : t("tsnetStart"),
+              ),
+              h("span", { className: "__dm_badge" }, tsnetPhase(tsnetState.phase)),
+              tsnetState.funnelURL ? h("span", { className: "__dm_url" }, tsnetState.funnelURL) : null,
+            )
+          : null,
+        tsnetState && tsnetState.enabled
+          ? h(
+              "label",
+              { className: "__dm_row", style: { gap: "8px", cursor: "pointer", alignItems: "center" } },
+              h("input", {
+                type: "checkbox",
+                checked: Boolean(tsnetState.autoStart),
+                onChange: function (e) {
+                  saveSettings({ tsnet: { autoStart: e.target.checked } });
+                },
+              }),
+              h("span", { className: "__dm_hint" }, t("tsnetAuto")),
+            )
+          : null,
+        tsnetState && !tsnetState.available ? h("p", { className: "__dm_err" }, t("tsnetNoBin")) : null,
+        tsnetState && tsnetState.authURL
+          ? h(
+              "div",
+              { className: "__dm_row" },
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "__dm_btn __dm_primary",
+                  onClick: function () {
+                    if (typeof window !== "undefined") window.open(tsnetState.authURL, "_blank", "noopener");
+                  },
+                },
+                t("tsnetLogin"),
+              ),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "__dm_btn",
+                  onClick: function () {
+                    copyLink(tsnetState.authURL);
+                  },
+                },
+                copied ? t("copied") : t("copy"),
+              ),
+            )
+          : null,
+        tsnetState && tsnetState.error ? h("p", { className: "__dm_err" }, tsnetState.error) : null,
+        tsnetState && tsnetState.enabled && !tsnetState.funnelURL ? h("p", { className: "__dm_hint" }, t("tsnetFirstRun")) : null,
+        tsnetState && tsnetState.enabled
+          ? h("p", { className: "__dm_hint" }, t("tsnetHostHint").replace("{host}", tsnetState.hostname || "pocket"))
+          : null,
         h(
           "div",
           { className: "__dm_row" },

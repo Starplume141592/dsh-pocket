@@ -13,6 +13,7 @@ import { createMobileGateway } from './gateway.js';
 import { createPushService } from './push.js';
 import { installNotifications } from './notify.js';
 import { createTunnelManager } from './tunnel.js';
+import { createTsnetManager } from './tsnet.js';
 
 export const name = 'dsh-mobile';
 export const inject = ['webServer', 'connection'];
@@ -66,6 +67,17 @@ export function apply(ctx, config = {}) {
       /* 设置卡每 2 秒轮询 /state，无需额外事件 */
     },
   });
+  const tsnet = createTsnetManager({
+    port,
+    dataDir,
+    store,
+    log,
+    sidecarPath: typeof config.tsnetPath === 'string' ? config.tsnetPath : '',
+    controlPort: Number(config.tsnetControlPort) > 0 ? Number(config.tsnetControlPort) : 8479,
+    onChange: () => {
+      /* 设置卡每 2 秒轮询 /state，无需额外事件 */
+    },
+  });
 
   const gateway = createMobileGateway({
     upstream,
@@ -80,38 +92,90 @@ export function apply(ctx, config = {}) {
     log,
     push,
     tunnel,
+    tsnet,
     notifyExternal: externalNotify,
+    setMobileEnabled,
   });
 
-  ctx.effect(() => {
-    const disposeNotify = externalNotify ? null : installNotifications(ctx, { push, store, log });
-    gateway
-      .start()
-      .then((info) => {
-        try {
-          fs.writeFileSync(
-            path.join(dataDir, 'last-start.json'),
-            JSON.stringify({ at: new Date().toISOString(), port: info.port, lanUrl: info.lanUrl, upstream: origin }, null, 2),
-          );
-        } catch {
-          /* 诊断文件写失败不影响运行 */
-        }
-        return tunnel.autoStart();
-      })
+  let mobileRunning = false;
+  let mobileStarting = null;
+  let notifyDispose = null;
+
+  function writeLastStart(info) {
+    try {
+      fs.writeFileSync(
+        path.join(dataDir, 'last-start.json'),
+        JSON.stringify({ at: new Date().toISOString(), port: info.port, lanUrl: info.lanUrl, upstream: origin }, null, 2),
+      );
+    } catch {
+      /* 诊断文件写失败不影响运行 */
+    }
+  }
+
+  function writeLastError(error) {
+    const message = `网关启动失败：${String(error?.message ?? error)}（端口 ${port} 可能被占用）`;
+    log(message);
+    try {
+      fs.writeFileSync(path.join(dataDir, 'last-error.log'), `${new Date().toISOString()} ${message}\n`);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function startMobile() {
+    if (mobileRunning) return;
+    if (mobileStarting) return mobileStarting;
+    mobileStarting = (async () => {
+      const info = await gateway.start();
+      mobileRunning = true;
+      if (!externalNotify && push?.available) {
+        notifyDispose = installNotifications(ctx, { push, store, log });
+      }
+      writeLastStart(info);
+      await tunnel.autoStart();
+      await tsnet.autoStart();
+    })()
       .catch((error) => {
-        const message = `网关启动失败：${String(error?.message ?? error)}（端口 ${port} 可能被占用）`;
-        log(message);
-        try {
-          fs.writeFileSync(path.join(dataDir, 'last-error.log'), `${new Date().toISOString()} ${message}\n`);
-        } catch {
-          /* ignore */
-        }
+        writeLastError(error);
+        throw error;
+      })
+      .finally(() => {
+        mobileStarting = null;
       });
-    return async () => {
-      disposeNotify?.();
-      await tunnel.stop();
-      await gateway.stop();
-    };
+    return mobileStarting;
+  }
+
+  async function stopMobile() {
+    if (mobileStarting) {
+      try { await mobileStarting; } catch { /* 启动失败时也要继续关闭 */ }
+    }
+    if (!mobileRunning) return;
+    mobileRunning = false;
+    try { notifyDispose?.(); } catch { /* ignore */ }
+    notifyDispose = null;
+    await tsnet.stop();
+    await tunnel.stop();
+    await gateway.stop();
+  }
+
+  async function setMobileEnabled(enabled) {
+    if (enabled) {
+      await startMobile();
+      store.updateSettings({ mobile: { enabled: true } });
+    } else {
+      await stopMobile();
+      store.updateSettings({ mobile: { enabled: false } });
+    }
+    return gateway.desktopState();
+  }
+
+  ctx.effect(() => {
+    if (store.settings.mobile.enabled) {
+      startMobile().catch(() => { /* 错误已写 last-error.log */ });
+    } else {
+      log('手机端已停用（设置 → 连接手机 里可重新启用）');
+    }
+    return () => stopMobile();
   }, 'dsh-mobile: gateway');
 
   ctx.effect(

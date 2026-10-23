@@ -62,6 +62,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 公网域名怎么搭：见 [docs/remote-domain.md](docs/remote-domain.md)，或直接运行
 `bash scripts/setup-tunnel.sh`（Git Bash）跟着向导走。
 
+想完全不装 Tailscale：插件自带 `sidecar/tsnet-sidecar.exe`，在设置卡勾「启用内嵌 Funnel」，
+按提示登录一次 Tailscale 即可拿到固定地址；构建方式见 [../sidecar/README.md](../sidecar/README.md)。
+
 ## 配置
 
 在 profile 的 `cordis.patch.yml` 里给 `dsh-mobile` 加 `config`：

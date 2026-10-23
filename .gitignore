@@ -18,6 +18,8 @@ asar-*.mjs
 
 # Local tooling and test artifacts
 tools/
+sidecar/*.exe
+flclash-backup/
 *.log
 *.pid
 .tmp-edge*/

@@ -28,6 +28,14 @@ if (Test-Path $cloudflared) {
   Write-Host "已准备 cloudflared → $binDir"
 }
 
+# 内嵌 Funnel 的 sidecar（tsnet）如果已经构建好，也一起放进数据目录。
+$tsnetSidecar = Join-Path $repoRoot "tools\tsnet-sidecar.exe"
+if (Test-Path $tsnetSidecar) {
+  $binDir = Join-Path $dataDir "bin"
+  New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+  Copy-Item $tsnetSidecar (Join-Path $binDir "tsnet-sidecar.exe") -Force
+  Write-Host "已准备 tsnet-sidecar → $binDir"
+}
 if ($Profile -eq "all") {
   $targets = @(Get-ChildItem $profileRoot -Directory -ErrorAction SilentlyContinue |
     Where-Object { Test-Path (Join-Path $_.FullName "cordis.patch.yml") } |

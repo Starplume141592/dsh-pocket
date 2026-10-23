@@ -26,9 +26,12 @@ test('旧版 state.json 能补齐新设置而不丢设备', () => {
   );
   const store = createStore(dir);
   assert.equal(store.settings.publicUrl, 'https://old.example.com');
+  assert.equal(store.settings.mobile.enabled, true);
   assert.equal(store.settings.notify.enabled, true);
   assert.equal(store.settings.tunnel.mode, 'off');
   assert.equal(store.settings.tunnel.autoStart, false);
+  assert.equal(store.settings.tsnet.enabled, false);
+  assert.equal(store.settings.tsnet.hostname, 'pocket');
   assert.equal(store.listDevices().length, 1);
   assert.equal(store.listDevices()[0].platform, '');
   fs.rmSync(dir, { recursive: true, force: true });
@@ -62,6 +65,36 @@ test('吊销设备会一并删掉它的推送订阅', () => {
   store.addSubscription(created.device.id, { endpoint: 'https://push.example.com/a', keys: { p256dh: 'p', auth: 'a' } });
   assert.equal(store.revokeDevice(created.device.id), true);
   assert.equal(store.listSubscriptions().length, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('内嵌 Funnel 设置：默认值、主机名清洗、非法值忽略', () => {
+  const dir = tempDir();
+  const store = createStore(dir);
+  assert.equal(store.settings.tsnet.enabled, false);
+  assert.equal(store.settings.tsnet.hostname, 'pocket');
+  store.updateSettings({ tsnet: { enabled: true, hostname: ' My Pocket! ', autoStart: true } });
+  assert.equal(store.settings.tsnet.hostname, 'mypocket');
+  const snapshot = store.settings;
+  snapshot.tsnet.enabled = false;
+  assert.equal(store.settings.tsnet.enabled, true, '返回的应是副本');
+  store.updateSettings({ tsnet: { autoStart: 'yes', hostname: '!!!' } });
+  assert.equal(store.settings.tsnet.autoStart, true);
+  assert.equal(store.settings.tsnet.hostname, 'pocket');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('手机端总开关：默认开、可关闭、返回副本', () => {
+  const dir = tempDir();
+  const store = createStore(dir);
+  assert.equal(store.settings.mobile.enabled, true);
+  store.updateSettings({ mobile: { enabled: false } });
+  assert.equal(store.settings.mobile.enabled, false);
+  const snapshot = store.settings;
+  snapshot.mobile.enabled = true;
+  assert.equal(store.settings.mobile.enabled, false, '返回的应是副本');
+  store.updateSettings({ mobile: { enabled: 'yes' } });
+  assert.equal(store.settings.mobile.enabled, false, '非法值忽略');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

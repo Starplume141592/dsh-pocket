@@ -55,4 +55,5 @@ jobs:
           tests/net.test.mjs
           tests/store.test.mjs
           tests/tunnel.test.mjs
+          tests/tsnet.test.mjs
           tests/notify.test.mjs

@@ -10,11 +10,24 @@ const MAX_SUBSCRIPTIONS = 16;
 const DEFAULT_SETTINGS = {
   publicUrl: '',
   lan: false,
+  // 手机端总开关：关掉后网关/推送/隧道/tsnet 全部停止，桌面设置卡仍可用。
+  mobile: { enabled: true },
   // 手机通知总开关；具体事件（审批/完成/失败）在 host 侧固定发送。
   notify: { enabled: true },
   // 公网隧道托管：off | quick | token；autoStart 表示 DSH 启动时自动拉起。
   tunnel: { mode: 'off', token: '', autoStart: false },
+  // 内嵌 Tailscale Funnel：由 tsnet sidecar 提供固定 HTTPS 地址，免安装 Tailscale。
+  tsnet: { enabled: false, hostname: 'pocket', autoStart: false, authKey: '' },
 };
+
+function normalizeHostname(value) {
+  const host = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '')
+    .slice(0, 40);
+  return host || 'pocket';
+}
 
 function atomicWrite(file, text) {
   const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
@@ -26,12 +39,17 @@ function normalizeSettings(raw) {
   const settings = {
     publicUrl: '',
     lan: false,
+    mobile: { ...DEFAULT_SETTINGS.mobile },
     notify: { ...DEFAULT_SETTINGS.notify },
     tunnel: { ...DEFAULT_SETTINGS.tunnel },
+    tsnet: { ...DEFAULT_SETTINGS.tsnet },
   };
   if (!raw || typeof raw !== 'object') return settings;
   if (typeof raw.publicUrl === 'string') settings.publicUrl = raw.publicUrl;
   if (typeof raw.lan === 'boolean') settings.lan = raw.lan;
+  if (raw.mobile && typeof raw.mobile === 'object' && typeof raw.mobile.enabled === 'boolean') {
+    settings.mobile.enabled = raw.mobile.enabled;
+  }
   if (raw.notify && typeof raw.notify === 'object' && typeof raw.notify.enabled === 'boolean') {
     settings.notify.enabled = raw.notify.enabled;
   }
@@ -41,6 +59,12 @@ function normalizeSettings(raw) {
     }
     if (typeof raw.tunnel.token === 'string') settings.tunnel.token = raw.tunnel.token;
     if (typeof raw.tunnel.autoStart === 'boolean') settings.tunnel.autoStart = raw.tunnel.autoStart;
+  }
+  if (raw.tsnet && typeof raw.tsnet === 'object') {
+    if (typeof raw.tsnet.enabled === 'boolean') settings.tsnet.enabled = raw.tsnet.enabled;
+    if (typeof raw.tsnet.hostname === 'string') settings.tsnet.hostname = normalizeHostname(raw.tsnet.hostname);
+    if (typeof raw.tsnet.autoStart === 'boolean') settings.tsnet.autoStart = raw.tsnet.autoStart;
+    if (typeof raw.tsnet.authKey === 'string') settings.tsnet.authKey = raw.tsnet.authKey;
   }
   return settings;
 }
@@ -85,8 +109,10 @@ export function createStore(dir) {
     get settings() {
       return {
         ...data.settings,
+        mobile: { ...data.settings.mobile },
         notify: { ...data.settings.notify },
         tunnel: { ...data.settings.tunnel },
+        tsnet: { ...data.settings.tsnet },
       };
     },
     updateSettings(patch = {}) {
@@ -95,6 +121,9 @@ export function createStore(dir) {
       }
       if (typeof patch.lan === 'boolean') {
         data.settings.lan = patch.lan;
+      }
+      if (patch.mobile && typeof patch.mobile === 'object' && typeof patch.mobile.enabled === 'boolean') {
+        data.settings.mobile.enabled = patch.mobile.enabled;
       }
       if (patch.notify && typeof patch.notify === 'object' && typeof patch.notify.enabled === 'boolean') {
         data.settings.notify.enabled = patch.notify.enabled;
@@ -108,6 +137,20 @@ export function createStore(dir) {
         }
         if (typeof patch.tunnel.autoStart === 'boolean') {
           data.settings.tunnel.autoStart = patch.tunnel.autoStart;
+        }
+      }
+      if (patch.tsnet && typeof patch.tsnet === 'object') {
+        if (typeof patch.tsnet.enabled === 'boolean') {
+          data.settings.tsnet.enabled = patch.tsnet.enabled;
+        }
+        if (typeof patch.tsnet.hostname === 'string') {
+          data.settings.tsnet.hostname = normalizeHostname(patch.tsnet.hostname);
+        }
+        if (typeof patch.tsnet.autoStart === 'boolean') {
+          data.settings.tsnet.autoStart = patch.tsnet.autoStart;
+        }
+        if (typeof patch.tsnet.authKey === 'string') {
+          data.settings.tsnet.authKey = patch.tsnet.authKey.trim().slice(0, 200);
         }
       }
       save();

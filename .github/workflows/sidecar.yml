@@ -1,0 +1,47 @@
+name: sidecar
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'sidecar/**'
+      - '.github/workflows/sidecar.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sidecar
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Resolve dependencies
+        run: go mod tidy
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build windows/amd64
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags "-s -w" -o tsnet-sidecar.exe .
+
+      - name: Checksum
+        run: sha256sum tsnet-sidecar.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsnet-sidecar-windows-amd64
+          path: sidecar/tsnet-sidecar.exe
+          if-no-files-found: error
