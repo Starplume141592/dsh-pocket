@@ -466,6 +466,36 @@ svg { display: block; }
 .conn-stat span { color: var(--faint); font-size: 10.5px; }
 .about { text-align: center; color: var(--faint); font-size: 11px; padding: 28px 0 12px; line-height: 1.7; }
 
+
+/* ── 首次连接 ─────────────────────────────────────────────────── */
+.connect-view {
+  min-height: 100dvh;
+  padding: calc(var(--safe-top) + 42px) 24px calc(28px + var(--safe-bottom));
+  display: flex; flex-direction: column; justify-content: center; gap: 28px;
+  max-width: 520px; margin: 0 auto;
+}
+.connect-hero .mark.lg { width: 64px; height: 64px; border-radius: 20px; margin-bottom: 20px; }
+.connect-hero .mark.lg svg { width: 30px; height: 30px; }
+.connect-eyebrow { margin: 0 0 10px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.connect-hero h1 { margin: 0; font-size: 38px; line-height: 1.12; letter-spacing: -.045em; font-weight: 760; }
+.connect-hero h1 .grad { background: linear-gradient(100deg, #a8bcff, #8b5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.connect-sub { margin: 14px 0 0; color: var(--muted); font-size: 14px; line-height: 1.65; max-width: 36ch; }
+.connect-form { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 7px; }
+.field > span { color: var(--faint); font-size: 11.5px; font-weight: 650; letter-spacing: .03em; padding-left: 4px; }
+.field input {
+  width: 100%; height: 52px; border-radius: 16px; border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--text); padding: 0 16px; font-size: 15px; outline: 0;
+  transition: border-color .2s, box-shadow .2s;
+}
+.field input:focus { border-color: rgba(91,124,255,.55); box-shadow: 0 0 0 3px rgba(91,124,255,.1); }
+.field input::placeholder { color: var(--faint); }
+.connect-submit { height: 50px; border-radius: 16px; font-size: 14.5px; }
+.connect-error { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; border-radius: 12px; color: var(--red); background: rgba(255,107,122,.07); border: 1px solid rgba(255,107,122,.18); font-size: 12px; line-height: 1.5; }
+.connect-help { display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11.5px; line-height: 1.5; padding: 2px 4px; }
+.connect-help .dot { width: 6px; height: 6px; box-shadow: none; }
+.connect-foot { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: auto; padding-top: 20px; }
+
 /* ── Toast / Sheet ────────────────────────────────────────────── */
 .toast {
   position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 18px); z-index: 90;

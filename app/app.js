@@ -77,7 +77,7 @@ const state = {
 
 /* ── 基础组件 ─────────────────────────────────────────────────── */
 function mark(size = '') {
-  return '<span class="mark ' + size + '">' + icon('spark', 'fill') + '</span>';
+  return '<span class="mark ' + size + '">' + icon('spark') + '</span>';
 }
 function topbar(opts = {}) {
   return '<header class="topbar">' +
@@ -306,6 +306,7 @@ function renderSettings() {
         '<div class="setting-row"><span class="setting-ico">' + icon('spark', 'sm') + '</span><div class="setting-main"><div class="setting-title">外观</div><div class="setting-sub">深色 / 浅色 / 跟随系统</div></div><button class="text-btn" data-action="appearance">深色 ' + icon('chevron', 'sm') + '</button></div>' +
       '</div></div>' +
       '<div class="settings-group"><p class="settings-label">连接</p><div class="settings-card">' +
+        '<div class="setting-row"><span class="setting-ico">' + icon('bolt', 'sm') + '</span><div class="setting-main"><div class="setting-title">服务器地址</div><div class="setting-sub">' + esc((() => { try { return localStorage.getItem('pocket-base') || location.host; } catch { return location.host; } })()) + '</div></div><button class="text-btn" data-action="server">更换</button></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('refresh', 'sm') + '</span><div class="setting-main"><div class="setting-title">同步状态</div><div class="setting-sub">实时事件流 · 已同步</div></div><button class="text-btn" data-action="resync">重新同步</button></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('shield', 'sm') + '</span><div class="setting-main"><div class="setting-title">设备与安全</div><div class="setting-sub">在电脑端管理已配对设备</div></div>' + icon('chevron', 'sm') + '</div>' +
       '</div></div>' +
@@ -321,6 +322,7 @@ function renderSettings() {
 function parseRoute() {
   const hash = location.hash || '#/home';
   if (hash.startsWith('#/chat/')) return { name: 'chat', id: hash.slice(7) };
+  if (hash.startsWith('#/connect')) return { name: 'connect' };
   if (hash.startsWith('#/sessions')) return { name: 'sessions' };
   if (hash.startsWith('#/activity')) return { name: 'activity' };
   if (hash.startsWith('#/settings')) return { name: 'settings' };
@@ -329,6 +331,12 @@ function parseRoute() {
 function render() {
   state.route = parseRoute();
   const app = $('#app');
+  if (state.route.name === 'connect') {
+    document.body.classList.remove('chat-mode');
+    app.innerHTML = renderConnect();
+    bindCommon();
+    return;
+  }
   if (state.route.name === 'chat') {
     const id = state.route.id;
     if (id.startsWith('session-')) {
@@ -360,6 +368,64 @@ function render() {
     app.innerHTML = html;
     bindCommon();
   }
+}
+
+/* ── 首次连接 / 配对提示 ─────────────────────────────────────── */
+function isNativeShell() {
+  return (location.protocol === 'https:' && location.hostname === 'localhost') || location.protocol === 'capacitor:';
+}
+function normalizeBase(value) {
+  let text = String(value || '').trim();
+  if (!text) return '';
+  if (!/^https?:\/\//i.test(text)) text = 'https://' + text;
+  return text.replace(/\/+$/, '');
+}
+function renderConnect(error) {
+  let saved = '';
+  try { saved = localStorage.getItem('pocket-base') || ''; } catch { /* ignore */ }
+  return '<div class="connect-view view-enter">' +
+    '<div class="connect-hero">' + mark('lg') +
+      '<p class="connect-eyebrow">POCKET · DSH 随行</p>' +
+      '<h1>连接你的 <span class="grad">DSH</span></h1>' +
+      '<p class="connect-sub">输入电脑上的公网地址。第一次使用需要在电脑端 DSH → 设置 → 连接手机里批准这台设备。</p>' +
+    '</div>' +
+    '<div class="connect-form">' +
+      '<label class="field"><span>DSH 地址</span>' +
+        '<input id="connect-url" type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://laptop.xxx.ts.net" value="' + esc(saved) + '">' +
+      '</label>' +
+      (error ? '<div class="connect-error">' + icon('x', 'sm') + '<span>' + esc(error) + '</span></div>' : '') +
+      '<button class="btn primary connect-submit" data-action="connect">' + icon('bolt', 'sm') + '连接</button>' +
+      '<div class="connect-help"><span class="dot"></span>连接后，这台手机上的会话、审批与电脑端保持同步。</div>' +
+    '</div>' +
+    '<div class="connect-foot">' +
+      '<button class="text-btn" data-action="demo">先看看界面</button>' +
+      '<span class="faint">·</span>' +
+      '<button class="text-btn" data-action="help">怎么找到地址？</button>' +
+    '</div>' +
+  '</div>';
+}
+function renderPairingNeeded() {
+  return '<div class="connect-view view-enter">' +
+    '<div class="connect-hero">' + mark('lg') +
+      '<p class="connect-eyebrow">POCKET · DSH 随行</p>' +
+      '<h1>还差一步</h1>' +
+      '<p class="connect-sub">这台设备还没有和电脑配对。请在电脑上打开 DSH → 设置 → 连接手机，生成二维码或配对链接。</p>' +
+    '</div>' +
+    '<div class="connect-form">' +
+      '<button class="btn primary connect-submit" data-action="retry">已配对，重新连接</button>' +
+      '<button class="btn ghost connect-submit" data-action="desktop">打开完整桌面 UI</button>' +
+      '<div class="connect-help"><span class="dot amber"></span>配对必须在电脑端批准，二维码 5 分钟内有效。</div>' +
+    '</div>' +
+    '<div class="connect-foot"><span class="faint">Pocket 不会接触 DSH 的启动令牌</span></div>' +
+  '</div>';
+}
+async function submitConnect() {
+  const input = $('#connect-url');
+  const base = normalizeBase(input?.value || '');
+  if (!base) { toast('请输入 DSH 地址'); return; }
+  try { localStorage.setItem('pocket-base', base); } catch { /* ignore */ }
+  toast('正在打开 ' + base + '…');
+  location.replace(base + '/__dshapp/');
 }
 
 /* ── 真实 DSH 数据 ───────────────────────────────────────────── */
@@ -727,8 +793,16 @@ async function bootstrap() {
   } catch (error) {
     live.demo = true;
     state.connected = false;
-    console.warn('[Pocket] 未连接 DSH，使用演示数据：', error?.message || error);
-    if (state.route.name === 'home') render();
+    console.warn('[Pocket] 未连接 DSH：', error?.message || error);
+    if (isNativeShell()) {
+      renderConnect(error?.message || '无法连接 DSH');
+    } else if (location.port === '8788' || location.hostname === 'localhost') {
+      if (state.route.name === 'home') render();
+    } else {
+      document.body.classList.remove('chat-mode');
+      $('#app').innerHTML = renderPairingNeeded();
+      bindCommon();
+    }
   }
 }
 if (typeof window !== 'undefined') {
@@ -882,6 +956,18 @@ function handleSheet(action) {
   if (action === 'about') toast('Pocket 0.3.0 · MIT');
 }
 function onAction(action, el) {
+  if (action === 'connect') return submitConnect();
+  if (action === 'demo') { live.demo = true; state.connected = false; location.hash = '#/home'; render(); return; }
+  if (action === 'retry') return reconnectNow();
+  if (action === 'desktop') { location.href = '/'; return; }
+  if (action === 'help') {
+    openSheet('怎么找到地址', '在电脑上打开 DSH → 设置 → 连接手机，复制「公网地址」或 Tailscale Funnel 地址。', [
+      { action: 'about', icon: 'shield', title: '需要先配对', sub: '地址填对后，手机仍要经过电脑批准' },
+      { action: 'about', icon: 'bolt', title: '必须 HTTPS', sub: '局域网 HTTP 只建议在可信网络使用' },
+    ]);
+    return;
+  }
+  if (action === 'server') { location.hash = '#/connect'; return; }
   if (action === 'send-home') return sendHome();
   if (action === 'send-chat') return sendChat();
   if (action === 'quick') {

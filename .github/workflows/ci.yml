@@ -26,8 +26,16 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Rebuild Pocket assets and check they are committed
+        run: |
+          node ../scripts/build-app.mjs ..
+          git diff --exit-code -- ../dsh-mobile/assets/pocket
+
       - name: Syntax check app shell
-        run: node --check ../app/app.js
+        run: |
+          node --check ../app/app.js
+          node --check ../app/api.js
+          node --check ../app/timeline.js
 
       - name: Validate PWA manifest
         run: node -e "JSON.parse(require('fs').readFileSync('../app/manifest.webmanifest','utf8'))"

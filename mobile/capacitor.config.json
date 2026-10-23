@@ -1,0 +1,9 @@
+{
+  "appId": "app.pocket.dsh",
+  "appName": "Pocket",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#07080b"
+  }
+}

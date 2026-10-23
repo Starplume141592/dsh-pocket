@@ -8,7 +8,7 @@
 
 > 状态：**v0.4-dev — 真实 DSH 会话已接通**。
 > 会话列表、快照 + WebSocket 增量、发消息、停止、token 级流式输出都已验证；
-> Android 打包、配对引导与系统通知还在进行。
+> Android Capacitor 工程已生成，配对引导页已加入；系统通知与签名发布还在进行。
 
 ![首页](docs/assets/pocket-home.png)
 ![会话](docs/assets/pocket-chat.png)
@@ -69,6 +69,8 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - **Gateway**：现有 dsh-mobile 插件，负责配对、设备令牌、反向代理、推送和公网入口。
 - **DSH Host**：会话与 Agent 的唯一事实源；Pocket 只读/写它的 HTTP RPC 与 WebSocket 事件流。
 
+![连接 DSH](docs/assets/pocket-connect.png)
+
 ## 本地预览 UI
 
 ~~~powershell
@@ -90,6 +92,33 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 配对与公网入口见 [docs/remote-domain.md](docs/remote-domain.md)。
 重启 DSH 后，手机打开 **https://你的地址/__dshapp/** 即可使用 Pocket 并安装到主屏幕。
 完整的桌面 UI 仍在根路径，高级功能（终端、文件树）可以继续走桌面 UI。
+
+## Android
+
+~~~powershell
+cd mobile
+npm ci
+npm run build:web
+npx cap sync android
+npx cap open android
+~~~
+
+本机没有 JDK / Android SDK 时，用 GitHub Actions 构建：
+推送 tag（例如 v0.4.0）或手动运行 **android** workflow，会产出 `pocket-debug-apk` artifact。
+
+Android 壳首次启动会显示「连接你的 DSH」：输入公网 HTTPS 地址后，WebView 会导航到该地址下的 `/__dshapp/`，
+因此 cookie、Service Worker 与配对流程都与 PWA 完全一致。
+
+## 建立 GitHub 仓库
+
+本机 `gh` 登录后执行：
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\create-github-repo.ps1
+~~~
+
+默认创建 public 仓库 `dsh-pocket`，推送 main，并设置 topics。
+也可以手动：`gh auth login` → `gh repo create dsh-pocket --public --source . --remote origin --push`。
 
 ## 开发
 
