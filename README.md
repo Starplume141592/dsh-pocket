@@ -54,7 +54,9 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - 网关上游 cookie 过期后自动刷新并重试一次（含 POST 请求体）
 - 网关 49 项单测 + App 31 项传输/时间线/离线缓存/偏好测试通过
 
-**还在进行**：签名 APK（工具链已就绪，构建中）、局域网/外网连接方式切换、内嵌 tsnet Funnel（sidecar 已编译，等一次 Tailscale 登录）。
+**还在进行**：release 签名 APK、局域网/外网连接方式切换、内嵌 tsnet Funnel（sidecar 已编译，等一次 Tailscale 登录）。
+debug APK 已构建：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+（4.2 MB，包名 `app.pocket.dsh`，versionName 0.4.0）。
 Android WebView 的 Web Push 不保证可用；系统级通知需要后续接 FCM 或原生通知桥。
 
 审批链路已真机验证：approval/request → 允许一次 → 工具执行 → 状态回到已同步。
@@ -129,8 +131,20 @@ npx cap sync android
 npx cap open android
 ~~~
 
-本机没有 JDK / Android SDK 时，用 GitHub Actions 构建：
-推送 tag（例如 v0.4.0）或手动运行 **android** workflow，会产出 `pocket-debug-apk` artifact。
+本机工具链（Go 1.27、JDK 21、Android SDK 36、Gradle 8.14.3）放在 `tools/`，不提交。
+命令行构建 debug APK：
+
+~~~powershell
+cd mobile
+node ..\scripts\build-mobile-web.mjs
+npx cap sync android
+cd android
+..\..\tools\gradle\gradle-8.14.3\bin\gradle.bat assembleDebug --no-daemon
+# => app\build\outputs\apk\debug\app-debug.apk
+~~~
+
+没有本机工具链时，用 GitHub Actions：推送 tag（例如 v0.4.0）或手动运行 **android** workflow，
+会产出 `pocket-debug-apk` artifact。
 
 Android 壳首次启动会显示「连接你的 DSH」：输入公网 HTTPS 地址后，WebView 会导航到该地址下的 `/__dshapp/`，
 因此 cookie、Service Worker 与配对流程都与 PWA 完全一致。

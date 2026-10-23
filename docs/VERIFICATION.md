@@ -142,6 +142,24 @@ App 传输/时间线/缓存/偏好测试覆盖：
 
 `sw.js` 为 `pocket-shell-v6`；安装副本 `prefs.js` 返回 200。
 
+## 5.5 Android debug APK（23:15）
+
+~~~text
+node scripts/build-mobile-web.mjs
+npx cap sync android
+tools\gradle\gradle-8.14.3\bin\gradle.bat assembleDebug --no-daemon
+=> BUILD SUCCESSFUL in 16s
+=> app-debug.apk 4,150,361 bytes
+
+aapt2 badging:
+  package app.pocket.dsh
+  versionName 0.4.0 / minSdk 24 / targetSdk 36
+assets/public/{app,cache,prefs,timeline}.js 已打进 APK
+~~~
+
+产物：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+（另一份 `dist/Pocket-0.4.0-debug.apk`，不提交）。
+
 网关新增覆盖：
 
 - /__dshapp/ 外壳可访问（未配对也可打开）
@@ -153,7 +171,7 @@ App 传输/时间线/缓存/偏好测试覆盖：
 
 - 审批 waterfall 已真机跑通（allowed-once）；尚未验证 rejected / cancelled 的界面回滚。
 - 预览服务器需要浏览器已有设备 cookie；否则会回退演示数据。
-- Capacitor Android 工程已生成，但本机没有 JDK / Android SDK，APK 还没打出来。
+- debug APK 已构建（`app.pocket.dsh` 0.4.0）；release 签名、上架、启动图/原生通知还没做。
 - Pocket 子路径 SW 已接推送；Android WebView 的 Web Push 不保证可用，需要 FCM 或原生通知桥。
 - 默认只显示最近 14 条，可加载更早（一次 10/20/40 条，上限 200）；更细的分页锚点还没做。
 - 离线快照用 localStorage，保留最近 120 条 / 300 KB / 12 个会话；离线翻页只在这个窗口内。
