@@ -27,6 +27,7 @@ flclash-backup/
 coverage/
 dist/
 dsh-mobile/assets/pocket/release/PocketHost.zip
+dsh-mobile/assets/pocket/release/DSHRemote.apk
 dsh-mobile/assets/pocket/release/Pocket-0.4.2-debug.apk
 build/
 

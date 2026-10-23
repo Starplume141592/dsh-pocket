@@ -2,7 +2,7 @@
 #   dist/PocketHost-<version>.zip
 # Contains the dsh-mobile plugin, both sidecars, and installer scripts.
 param(
-  [string]$Version = '0.4.1'
+  [string]$Version = '0.5.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,7 +25,7 @@ Copy-Item (Join-Path $repo 'dsh-mobile\assets') (Join-Path $plugin 'assets') -Re
 Copy-Item (Join-Path $repo 'dsh-mobile\node_modules') (Join-Path $plugin 'node_modules') -Recurse
 
 # Do not bundle the host zip or APK into the host zip.
-foreach ($name in @('PocketHost.zip', 'Pocket-0.4.2-debug.apk')) {
+foreach ($name in @('PocketHost.zip', 'PocketHost-0.5.0.zip', 'DSHRemote.apk', 'Pocket-0.4.2-debug.apk')) {
   $nested = Join-Path $plugin "assets\pocket\release\$name"
   if (Test-Path $nested) { Remove-Item $nested -Force }
 }
@@ -42,6 +42,8 @@ foreach ($exe in @('tsnet-sidecar.exe', 'cloudflared.exe')) {
 # Installer scripts at the zip root.
 Copy-Item (Join-Path $PSScriptRoot 'host\install.ps1') $stage
 Copy-Item (Join-Path $PSScriptRoot 'host\uninstall.ps1') $stage
+Copy-Item (Join-Path $PSScriptRoot 'host\install.bat') $stage
+Copy-Item (Join-Path $PSScriptRoot 'host\uninstall.bat') $stage
 Copy-Item (Join-Path $PSScriptRoot 'host\README.txt') $stage
 
 if (Test-Path $zip) { Remove-Item $zip -Force }

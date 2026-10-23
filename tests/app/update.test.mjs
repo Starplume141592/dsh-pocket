@@ -7,6 +7,8 @@ import {
   entryCandidates,
   normalizeBase,
   fetchReleaseConfig,
+  shellVersion,
+  updateTargets,
 } from '../../app/update.js';
 
 test('version compare handles prefixes and suffixes', () => {
@@ -15,7 +17,7 @@ test('version compare handles prefixes and suffixes', () => {
   assert.equal(compareVersions('0.5', '0.4.9'), 1);
   assert.equal(compareVersions('1.0.0', '1.0.0'), 0);
   assert.equal(isNewerVersion('0.4.1', APP_VERSION), false);
-  assert.equal(isNewerVersion('0.5.0', APP_VERSION), true);
+  assert.equal(isNewerVersion('0.5.1', APP_VERSION), true);
 });
 
 test('base normalization and entry candidates prefer config, then saved', () => {
@@ -32,8 +34,16 @@ test('fetchReleaseConfig returns null on failure and parses success', async () =
   assert.equal(failed, null);
 
   const value = await fetchReleaseConfig({
-    fetchImpl: async () => ({ ok: true, json: async () => ({ version: '0.4.2', publicUrl: 'https://x.test' }) }),
+    fetchImpl: async () => ({ ok: true, json: async () => ({ version: '0.5.0', apkVersion: '0.5.0' }) }),
+    url: 'https://example.test/release/config.json',
   });
-  assert.equal(value.version, '0.4.2');
-  assert.equal(value.publicUrl, 'https://x.test');
+  assert.equal(value.version, '0.5.0');
+  assert.equal(value.apkVersion, '0.5.0');
+});
+
+test('update targets distinguish web UI from native shell', () => {
+  assert.deepEqual(updateTargets({ version: '0.5.0', apkVersion: '0.5.0' }, '0.5.0', '0.5.0'), { web: false, apk: false });
+  assert.deepEqual(updateTargets({ version: '0.5.1', apkVersion: '0.5.0' }, '0.5.0', '0.5.0'), { web: true, apk: false });
+  assert.deepEqual(updateTargets({ version: '0.5.1', apkVersion: '0.5.1' }, '0.5.0', '0.5.0'), { web: true, apk: true });
+  assert.equal(shellVersion(), '');
 });

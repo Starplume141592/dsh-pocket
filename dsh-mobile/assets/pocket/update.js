@@ -1,9 +1,9 @@
-/* Pocket update helpers: version compare, release config, native entry choice.
+/* Pocket update helpers: version compare, release config, shell version.
  * No DOM; safe to unit-test in Node.
  */
 
-export const APP_VERSION = '0.4.2';
-export const RELEASE_CONFIG_URL = 'https://Starplume141592.github.io/dsh-pocket/releases/config.json';
+export const APP_VERSION = '0.5.0';
+export const RELEASE_CONFIG_URL = './release/config.json';
 
 export function normalizeBase(value) {
   let text = String(value || '').trim();
@@ -47,17 +47,40 @@ export function entryCandidates(savedBase, config) {
   return list;
 }
 
+/** The native shell appends PocketShell/<version> to its WebView UA. */
+export function shellVersion() {
+  const match = /PocketShell\/([0-9.]+)/i.exec(navigator.userAgent || '');
+  return match ? match[1] : '';
+}
+
+export function isPocketShell() {
+  return Boolean(shellVersion());
+}
+
+/**
+ * A release can need one or both:
+ * - the web UI (hot-updatable; update.js / app.js / CSS)
+ * - the native shell (APK install required; login / Tailscale / VPN)
+ */
+export function updateTargets(config, currentWeb, currentShell) {
+  const web = Boolean(config && isNewerVersion(config.version, currentWeb || APP_VERSION));
+  const apk = Boolean(config && currentShell && config.apkVersion && isNewerVersion(config.apkVersion, currentShell));
+  return { web, apk };
+}
+
 export async function fetchReleaseConfig(options = {}) {
-  const {
-    url = RELEASE_CONFIG_URL,
-    fetchImpl = globalThis.fetch,
-    timeoutMs = 3500,
-  } = options;
+  const { timeoutMs = 3500, fetchImpl = globalThis.fetch, url: explicitUrl } = options;
   if (typeof fetchImpl !== 'function') return null;
+  const base = typeof location !== 'undefined' ? location.href.replace(/#.*$/, '') : '';
+  const url = explicitUrl || new URL(RELEASE_CONFIG_URL, base || 'https://localhost/').href;
+  const separator = url.includes('?') ? '&' : '?';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error('release config timeout')), timeoutMs);
   try {
-    const response = await fetchImpl(url, { cache: 'no-store', signal: controller.signal });
+    const response = await fetchImpl(url + separator + 't=' + Date.now(), {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
     if (!response?.ok) return null;
     const value = await response.json();
     return value && typeof value === 'object' ? value : null;

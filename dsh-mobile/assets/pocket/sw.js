@@ -1,7 +1,7 @@
 /* Pocket service worker — app shell + push notifications.
  * Never cache session/API traffic.
  */
-const CACHE = 'pocket-shell-v7';
+const CACHE = 'pocket-shell-v12';
 const SHELL = [
   './', './index.html', './styles.css', './app.js',
   './api.js', './timeline.js', './cache.js', './prefs.js', './update.js',

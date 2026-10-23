@@ -5,7 +5,7 @@ import { PocketApi, sessionSummary } from './api.js';
 import { Timeline, formatRelative } from './timeline.js';
 import { createCache, CHAT_LIMIT } from './cache.js';
 import { createPrefs, ACCENTS, PAGE_SIZES } from './prefs.js';
-import { APP_VERSION, fetchReleaseConfig, entryCandidates, isNewerVersion, normalizeBase } from './update.js';
+import { APP_VERSION, fetchReleaseConfig, entryCandidates, normalizeBase, shellVersion, updateTargets } from './update.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -170,14 +170,9 @@ function tabbar(active) {
     { id: 'activity', label: '活动', icon: 'activity', href: '#/activity' },
     { id: 'settings', label: '设置', icon: 'settings', href: '#/settings' },
   ].filter((tab) => tab.id !== 'activity' || prefs.value.showActivity);
-  const fabAt = Math.min(2, tabs.length - 1);
+  const fabAt = -1;
   const tabHtml = (t) => '<a class="tab ' + (active === t.id ? 'active' : '') + '" href="' + t.href + '">' + icon(t.icon) + '<span>' + t.label + '</span></a>';
-  return '<nav class="tabbar">' + tabs.map((t, i) => {
-    const fab = i === fabAt
-      ? '<div class="tab-fab"><button data-action="new-chat" aria-label="新建会话">' + icon('plus') + '</button></div>'
-      : '';
-    return fab + tabHtml(t);
-  }).join('') + '</nav>';
+  return '<nav class="tabbar">' + tabs.map((t) => tabHtml(t)).join('') + '</nav>';
 }
 function statusBadge(status) {
   if (status === 'running') return '<span class="badge run"><span class="dot pulse" style="width:5px;height:5px;box-shadow:none"></span>进行中</span>';
@@ -201,40 +196,38 @@ function sessionItem(s) {
 /* ── 首页 ─────────────────────────────────────────────────────── */
 function renderHome() {
   const running = live.offline ? null : state.sessions.find(s => s.status === 'running');
-  return topbar() +
-    '<section class="hero view-enter">' +
-      '<p class="eyebrow">' + esc(dateLabel) + '</p>' +
-      '<h1>晚上好。<br><span>今天想让 <span class="grad">DSH</span> 做什么？</span></h1>' +
-      '<div class="composer-card">' +
-        '<textarea id="home-input" rows="2" placeholder="描述你想构建的内容，或继续上次的任务…" aria-label="输入任务"></textarea>' +
-        '<div class="composer-tools">' +
-          '<button class="chip" data-action="attach">' + icon('paperclip') + '附件</button>' +
-          '<button class="chip model" data-action="model">' + icon('spark') + 'DeepSeek V4.1</button>' +
-          '<button class="send-btn" data-action="send-home" aria-label="发送">' + icon('send', 'fill') + '</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="quick-row">' +
-        '<button class="chip" data-action="quick" data-text="继续上次的任务">' + icon('refresh') + '继续上次</button>' +
-        '<button class="chip" data-action="quick" data-text="看看现在有什么待审批">' + icon('shield') + '待审批</button>' +
-        '<button class="chip" data-action="new-chat">' + icon('plus') + '新会话</button>' +
-      '</div>' +
-    '</section>' +
-    (running ? (() => {
-      const stats = running.raw?.projections?.values?.sessionStats || {};
-      const step = stats.steps ? '第 ' + stats.steps + ' 步' : '实时同步';
-      return '<section class="running-card view-enter">' +
-        '<div class="running-top"><span class="dot pulse"></span>正在运行</div>' +
-        '<div class="running-title">' + esc(running.title) + '</div>' +
-        '<div class="running-meta"><span>' + esc(running.snippet) + '</span><span class="faint">·</span><span>' + esc(step) + '</span></div>' +
-        '<div class="running-foot"><div class="progress"><i></i></div><button class="btn-ghost" data-action="open-chat" data-id="' + running.id + '">查看</button></div>' +
-      '</section>';
-    })() : '') +
-    '<section class="section">' +
-      '<div class="section-head"><h2>最近会话<span class="count">' + state.sessions.length + '</span></h2><a class="text-btn" href="#/sessions">全部</a></div>' +
-      '<div class="session-list">' + state.sessions.slice(0, 3).map(sessionItem).join('') + '</div>' +
-    '</section>' +
-    '<div style="height:24px"></div>' +
-    tabbar('home');
+  const step = running?.raw?.projections?.values?.sessionStats?.steps;
+  return '<div class="home">' +
+    '<header class="home-header">' +
+      '<div><p class="home-date">' + esc(dateLabel) + '</p><h1>会话</h1></div>' +
+      '<button class="home-avatar" data-go="#/settings" aria-label="设置">' + icon('settings', 'sm') + '</button>' +
+    '</header>' +
+    offlineStrip() +
+    (running ? '<a class="running-row" href="#/chat/' + running.id + '">' +
+      '<span class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></span>' +
+      '<span class="running-copy">' +
+        '<span class="live-label"><span class="dot pulse"></span>正在运行</span>' +
+        '<span class="running-title">' + esc(running.title) + '</span>' +
+        '<span class="running-meta">' + esc(running.snippet) + (step ? ' · 第 ' + step + ' 步' : '') + '</span>' +
+        '<span class="running-bar"><i></i></span>' +
+      '</span>' +
+      '<span class="chev">' + icon('chevron', 'sm') + '</span>' +
+    '</a>' : '') +
+    '<div class="home-tools">' +
+      '<button class="new-task" data-action="new-chat">' + icon('plus', 'sm') + '新建任务</button>' +
+      '<button class="status-link" data-action="connection">' +
+        '<span class="dot ' + (state.connected ? 'pulse' : 'amber') + '"></span>' +
+        (state.connected ? '已连接' : '重连中') +
+      '</button>' +
+    '</div>' +
+    '<div class="section-head"><h2>最近</h2><a class="text-btn" href="#/sessions">全部</a></div>' +
+    '<div class="session-list">' + state.sessions.slice(0, 4).map(sessionItem).join('') + '</div>' +
+    '<form class="home-composer" onsubmit="return false">' +
+      '<textarea id="home-input" rows="1" placeholder="继续上次的任务，或新建一个…" aria-label="输入任务"></textarea>' +
+      '<button class="send-btn" data-action="send-home" aria-label="发送">' + icon('send', 'fill') + '</button>' +
+    '</form>' +
+    tabbar('home') +
+  '</div>';
 }
 
 /* ── 会话列表页 ───────────────────────────────────────────────── */
@@ -482,7 +475,7 @@ function renderConnect(error) {
       '<p class="connect-sub">Pocket 需要电脑上的 DSH 先装「连接手机」插件。装好后扫码配对，之后就能在手机上看会话、批准工具。</p>' +
     '</div>' +
     '<div class="connect-steps">' +
-      '<div class="connect-step"><span class="n">1</span><div><b>电脑端装好插件</b><p>DSH → 设置 → 连接手机；没有这张卡片，先装电脑端安装包。</p></div></div>' +
+      '<div class="connect-step"><span class="n">1</span><div><b>电脑端装好插件</b><p>DSH → 设置 → 连接手机；没有这张卡片，点底部「电脑端安装说明」。</p></div></div>' +
       '<div class="connect-step"><span class="n">2</span><div><b>扫码或粘贴配对链接</b><p>用手机系统相机扫电脑上的二维码；也可以把二维码下面的链接粘贴到下面。</p></div></div>' +
       '<div class="connect-step"><span class="n">3</span><div><b>在电脑上批准</b><p>核对 6 位配对码，点「批准」，手机会自动进入。</p></div></div>' +
     '</div>' +
@@ -501,7 +494,7 @@ function renderConnect(error) {
       '<div class="connect-help"><span class="dot"></span>连接后，这台手机上的会话、审批与电脑端保持同步。</div>' +
     '</div>' +
     '<div class="connect-foot">' +
-      '<button class="text-btn" data-action="install-host">电脑端还没装插件？</button>' +
+      '<button class="text-btn" data-action="install-host">电脑端安装说明</button>' +
       '<span class="faint">·</span>' +
       '<button class="text-btn" data-action="help">地址是什么？</button>' +
     '</div>' +
@@ -1410,26 +1403,97 @@ function toggle(key) {
   toast(state.settings[key] ? '已开启' : '已关闭');
 }
 let updateChecking = false;
-async function checkForUpdate() {
+let lastUpdateCheck = 0;
+
+function updatePromptKey(config) {
+  return 'pocket-update-seen:' + (config.version || '') + ':' + (config.apkVersion || '');
+}
+
+async function checkForUpdate(options = {}) {
+  const manual = options.manual === true;
   if (updateChecking) return;
   updateChecking = true;
-  toast('正在检查更新…');
+  lastUpdateCheck = Date.now();
+  if (manual) toast('正在检查更新…');
   try {
-    const config = await fetchReleaseConfig();
-    if (!config) { toast('检查更新失败：发布页不可达'); return; }
-    if (!isNewerVersion(config.version, APP_VERSION)) { toast('已是最新版本 ' + APP_VERSION); return; }
+    const config = await fetchReleaseConfig({ timeoutMs: 4000 });
+    if (!config) {
+      if (manual) toast('检查更新失败：发布配置不可达');
+      return;
+    }
+    const targets = updateTargets(config, APP_VERSION, shellVersion());
+    if (!targets.web && !targets.apk) {
+      if (manual) toast('已是最新版本 ' + APP_VERSION);
+      return;
+    }
+    const key = updatePromptKey(config);
+    let seen = '';
+    try { seen = localStorage.getItem(key) || ''; } catch { /* ignore */ }
+    if (!manual && seen === '1') return;
+    try { localStorage.setItem(key, '1'); } catch { /* ignore */ }
     live.updateConfig = config;
-    openSheet('发现新版本 ' + config.version, '当前 ' + APP_VERSION + ' · 下载后覆盖安装', [
-      { action: 'download-update', icon: 'plus', title: '下载 APK', sub: config.apkUrl ? '打开浏览器下载' : '发布页未配置下载地址' },
-      { action: 'about', icon: 'shield', title: '稍后再说', sub: '当前版本可继续使用' },
-    ]);
+    const notes = Array.isArray(config.notes) ? config.notes.slice(0, 3).join(' · ') : '';
+    if (targets.apk) {
+      openSheet('发现新版本 v' + (config.apkVersion || config.version), '原生壳需要更新；登录状态和设置会保留。' + (notes ? '\n' + notes : ''), [
+        { action: 'download-update', icon: 'plus', title: '下载新 APK', sub: '浏览器下载后覆盖安装' },
+        { action: 'release-open', icon: 'chats', title: '打开发布页', sub: '更新说明与安装步骤' },
+        { action: 'about', icon: 'shield', title: '稍后再说', sub: '当前版本可继续使用' },
+      ]);
+    } else {
+      openSheet('新版本已就绪', '界面版本 ' + APP_VERSION + ' → ' + config.version + '，刷新后生效。' + (notes ? '\n' + notes : ''), [
+        { action: 'reload-update', icon: 'refresh', title: '立即刷新', sub: '不会退出登录' },
+        { action: 'release-open', icon: 'chats', title: '查看更新说明', sub: '打开发布页' },
+        { action: 'about', icon: 'shield', title: '稍后再说', sub: '下次打开再提示' },
+      ]);
+    }
   } finally {
     updateChecking = false;
   }
 }
+
+function scheduleUpdateChecks() {
+  setTimeout(() => checkForUpdate({ manual: false }), 4500);
+  setInterval(() => {
+    if (document.visibilityState === 'visible') checkForUpdate({ manual: false });
+  }, 10 * 60 * 1000);
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastUpdateCheck < 2 * 60 * 1000) return;
+    checkForUpdate({ manual: false });
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
+}
+function copyText(text, message) {
+  if (!text) return;
+  const done = () => toast(message || '已复制');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {
+      window.prompt('复制这段内容', text);
+    });
+  } else {
+    window.prompt('复制这段内容', text);
+  }
+}
+function showHostInstall() {
+  openSheet('电脑端安装', 'Pocket 需要电脑上的 DSH 先装「连接手机」插件。装完完全退出 DSH 再重新打开，设置里才会出现这张卡片。', [
+    { action: 'host-download', icon: 'plus', title: '下载 PocketHost.zip', sub: 'GitHub Release · Windows 电脑端安装包' },
+    { action: 'host-command', icon: 'bolt', title: '复制 PowerShell 安装命令', sub: '在电脑 PowerShell 里运行，自动下载并安装' },
+    { action: 'host-open', icon: 'chats', title: '打开发布页', sub: '图文步骤、镜像下载和常见问题' },
+  ]);
+}
 function handleSheet(action) {
-  if (action === 'install-host') {
-    window.open('https://pocket.taila66dc2.ts.net/__dshapp/release/', '_blank', 'noopener');
+  if (action === 'install-host') { showHostInstall(); return; }
+  if (action === 'host-download') {
+    window.open('https://github.com/Starplume141592/dsh-pocket/releases/download/native-test/PocketHost.zip', '_blank', 'noopener');
+    return;
+  }
+  if (action === 'host-open') {
+    window.open('./release/', '_blank', 'noopener');
+    return;
+  }
+  if (action === 'host-command') {
+    copyText('irm https://raw.githubusercontent.com/Starplume141592/dsh-pocket/main/docs/install.ps1 | iex', '安装命令已复制，到电脑 PowerShell 运行');
     return;
   }
   if (action === 'theme-dark' || action === 'theme-light' || action === 'theme-system') {
@@ -1439,9 +1503,19 @@ function handleSheet(action) {
     toast(action === 'theme-light' ? '已切换浅色' : '已切换深色');
   }
   if (action === 'download-update') {
-    const url = live.updateConfig?.apkUrl;
+    const url = live.updateConfig?.apkUrl || live.updateConfig?.apkMirrorUrl;
     if (url) window.open(url, '_blank', 'noopener');
     else toast('发布页还没有可用的 APK');
+    return;
+  }
+  if (action === 'release-open') {
+    const url = live.updateConfig?.releasePage || './release/';
+    window.open(url, '_blank', 'noopener');
+    return;
+  }
+  if (action === 'reload-update') {
+    location.reload();
+    return;
   }
   if (action.startsWith('accent-')) {
     const accent = action.slice('accent-'.length);
@@ -1459,10 +1533,10 @@ function onAction(action, el) {
   if (action === 'connect-pair') return submitPairLink();
   if (action === 'test-connect') return testConnection();
   if (action === 'install-host') {
-    window.open('https://pocket.taila66dc2.ts.net/__dshapp/release/', '_blank', 'noopener');
+    showHostInstall();
     return;
   }
-  if (action === 'check-update') { checkForUpdate(); return; }
+  if (action === 'check-update') { checkForUpdate({ manual: true }); return; }
   if (action === 'pref-accent') {
     openSheet('主题色', '选一个强调色，立即生效', ACCENTS.map((accent) => ({
       action: 'accent-' + accent,
@@ -1634,6 +1708,7 @@ function startApp() {
   document.documentElement.dataset.theme = state.theme;
   render();
   bootstrap();
+  scheduleUpdateChecks();
 }
 
 async function nativeBoot() {

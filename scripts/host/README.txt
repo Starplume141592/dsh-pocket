@@ -10,10 +10,10 @@ Pocket 需要电脑端 DSH 安装「连接手机」插件。这个包已经带�
 安装
 ----
 1. 先启动一次 DSH，确认它已经创建过 profile。
-2. 右键 install.ps1 -> 使用 PowerShell 运行，或在本目录执行：
-     powershell -ExecutionPolicy Bypass -File .\install.ps1
+2. 双击 install.bat（或在 PowerShell 里运行 install.ps1）。
 3. 完全退出 DSH，再重新打开。
-4. DSH 设置里会出现「连接手机」。
+4. DSH 的「插件 → 已安装插件」里会出现 dsh-mobile，
+   左侧栏也会出现「手机」图标。
 
 如果提示找不到 profile
 -----------------------

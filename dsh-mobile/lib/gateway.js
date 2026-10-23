@@ -203,6 +203,7 @@ export function createMobileGateway({
   let lanUrl = '';
   let lanReachable = false;
   let pairing = null;
+  let tailnetDevice = null;
   let lastError = '';
   const sockets = new Set();
   const upgradedSockets = new Set();
@@ -642,9 +643,12 @@ export function createMobileGateway({
     // tailnet-only entry: trust the sidecar and mint a device on first contact.
     if (isTailnetRequest(req) && !authenticate(req)) {
       try {
-        const created = store.addDevice({ name: 'Pocket (tailnet)', platform: 'tailscale', ip: clientIp(req) });
-        setDeviceCookie(req, res, created.device.id, created.token);
-        req.pocketDevice = created.device;
+        if (!tailnetDevice || !store.findDevice(tailnetDevice.id)) {
+          const created = store.addDevice({ name: 'Pocket (tailnet)', platform: 'tailscale', ip: clientIp(req) });
+          tailnetDevice = { id: created.device.id, token: created.token };
+        }
+        setDeviceCookie(req, res, tailnetDevice.id, tailnetDevice.token);
+        req.pocketDevice = store.findDevice(tailnetDevice.id);
       } catch {
         /* fall through to the normal auth check */
       }

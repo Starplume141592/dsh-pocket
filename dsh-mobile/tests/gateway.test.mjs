@@ -481,6 +481,11 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     assert.match(cookie, /dshm_device=/);
     const state = await desktopFetch(harness, '/state');
     assert.ok(state.body.devices.some((d) => d.name === 'Pocket (tailnet)'));
+    const before = state.body.devices.length;
+    const again = await phoneFetch(harness, '/__dshapp/', { headers: { 'x-pocket-tailnet': '1' } });
+    assert.equal(again.status, 200);
+    const after = await desktopFetch(harness, '/state');
+    assert.equal(after.body.devices.length, before, 'tailnet 请求应复用同一台设备');
   });
 
   await t.test('吊销设备后立即失效', async () => {
