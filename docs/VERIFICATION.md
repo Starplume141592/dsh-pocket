@@ -161,19 +161,16 @@ assets/public/{app,update,cache,prefs,timeline}.js 已打进 APK
 产物：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 （另一份 `dist/Pocket-0.4.1-debug.apk`，不提交）。
 
-## 5.6 公网入口与配对（23:30）
+## 5.6 公网入口与配对（23:30 / 证书 23:37 签发）
 
 - Tailscale 节点 `pocket` 登录成功，tsnet sidecar `phase=serving`，
   `funnelURL=https://pocket.taila66dc2.ts.net`。
-- 但 ACME DNS-01 的 `SetDNS` 调用超时，证书一直 `tls-cert-pending`，该地址暂时打不开。
-- Cloudflare 临时隧道可用：`https://suited-protein-break-globe.trycloudflare.com`
-  - 公网 DNS 解析 + TLS 探针返回 200：
-    `{"ok":true,"version":"0.2.0","upstream":"http://127.0.0.1:14104"}`
-  - 手机已扫码配对，设备「手机」在线，Pocket 成功进入。
-- 设置卡二维码 403：插件卡片可能是沙箱 iframe，`Origin` 为 `null`；
-  已放宽 `isDesktopRequest`（`null` 或任意 loopback origin），下次重启生效。
-  本次用手动生成的二维码完成配对。
-- 测试：网关 21（新增 Origin 1 项），总 **81/81**。
+- ACME DNS-01 重试后 **23:37:12 拿到证书**：`certs/pocket.taila66dc2.ts.net.crt` 4837 字节。
+- 23:57 重启 DSH 后 tsnet 自动拉起（PID 22408），upstream 更新为
+  `http://127.0.0.1:51196`；Funnel 健康检查与 `__dshapp` 均返回 200。
+- 临时 Cloudflare 隧道已停（旧地址返回 530），`publicUrl` 已切到 Funnel。
+- 设置卡二维码 403 的 Origin 修复已生效：`Origin: null` 的 POST `/pair/start` 返回 200。
+- 测试：网关 21（新增 Origin 1 项），总 **84/84**。
 
 网关新增覆盖：
 
@@ -205,9 +202,8 @@ assets/public/{app,update,cache,prefs,timeline}.js 已打进 APK
 - 离线快照用 localStorage，保留最近 120 条 / 300 KB / 12 个会话；离线翻页只在这个窗口内。
 - 第三方扩展只有设计稿（`docs/product/PLUGINS.md`），扩展宿主还没实现。
 - 拆分 core/pocket 两个插件包还没落地，当前仍是单个 `dsh-mobile`。
-- Funnel 节点已登录，但 HTTPS 证书仍在 ACME 重试（`SetDNS` 超时）；当前靠临时
-  trycloudflare 隧道，重启 cloudflared 后地址会变。
-- 设置卡二维码的 Origin 修复已装进 profile，但要下次重启 DSH 才生效；当前可用手动配对链接。
+- Funnel 证书已签发并可用；tsnet 会自动续期，但 sidecar 必须保持运行。
+- release 签名还没做：debug 包只能侧载；换签名后第一次仍需卸载重装。
 
 ## 7. 复现
 

@@ -1,12 +1,12 @@
 {
   "version": "0.4.1",
   "channel": "dev",
-  "publicUrl": "https://suited-protein-break-globe.trycloudflare.com",
+  "publicUrl": "https://pocket.taila66dc2.ts.net",
   "appPath": "/__dshapp/",
   "apkUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/v0.4.1/Pocket-0.4.1-debug.apk",
   "repoUrl": "https://github.com/Starplume141592/dsh-pocket",
   "updatedAt": "2026-10-23T16:00:00Z",
-  "entryHint": "当前是 Cloudflare 临时隧道，地址会在隧道重启后变化；稳定 Funnel 证书签下来后只需改这个 config.json。",
+  "entryHint": "稳定 Funnel 入口，HTTPS 证书已签发；换入口只需改这个 config.json。",
   "notes": [
     "APK 远程启动：UI 从网关加载，更新服务器资源即可热更",
     "设置里可检查更新，读取本发布页的 version / apkUrl",

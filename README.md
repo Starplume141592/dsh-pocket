@@ -58,10 +58,10 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - **更新能力**：APK 远程启动（UI 热更）、设置→检查更新、PWA SW 新版本自动刷新、发布页 `config.json` 热切换入口
 - 网关 50 项单测 + App 34 项传输/时间线/离线缓存/偏好/更新测试通过
 
-**还在进行**：release 签名 APK、局域网/外网连接方式切换、内嵌 tsnet Funnel 的 HTTPS 证书
-（sidecar 已编译并登录，ACME 证书还在重试；临时 Cloudflare 隧道已可用）。
+**还在进行**：release 签名 APK、局域网/外网连接方式切换。
+内嵌 tsnet Funnel 已签下 HTTPS 证书：**https://pocket.taila66dc2.ts.net**。
 debug APK 已构建：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
-（4.2 MB，包名 `app.pocket.dsh`，versionName 0.4.1）。
+（4.15 MB，包名 `app.pocket.dsh`，versionName 0.4.1）。
 Android WebView 的 Web Push 不保证可用；系统级通知需要后续接 FCM 或原生通知桥。
 
 审批链路已真机验证：approval/request → 允许一次 → 工具执行 → 状态回到已同步。
