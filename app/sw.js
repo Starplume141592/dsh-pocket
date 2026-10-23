@@ -1,8 +1,12 @@
 /* Pocket service worker — app shell + push notifications.
  * Never cache session/API traffic.
  */
-const CACHE = 'pocket-shell-v2';
-const SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const CACHE = 'pocket-shell-v6';
+const SHELL = [
+  './', './index.html', './styles.css', './app.js',
+  './api.js', './timeline.js', './cache.js', './prefs.js',
+  './manifest.webmanifest', './icon-192.png', './icon-512.png',
+];
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
@@ -28,7 +32,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.pathname.match(/\.(css|js|png|webmanifest|woff2?)$/)) {
-    event.respondWith(caches.match(req).then(hit => hit || fetch(req)));
+    // Stale-while-revalidate: instant shell, then keep the copy fresh.
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const hit = await cache.match(req);
+      if (hit) {
+        fetch(req).then((res) => {
+          if (res.ok) cache.put(req, res.clone());
+        }).catch(() => {});
+        return hit;
+      }
+      try {
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      } catch {
+        return new Response('', { status: 504, statusText: 'offline' });
+      }
+    })());
   }
 });
 

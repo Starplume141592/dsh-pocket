@@ -61,6 +61,29 @@ test('prompt sends a stable requestId, text block and time zone', async () => {
   assert.equal(request.clientTimeZone, 'Asia/Shanghai');
 });
 
+test('page sends the session address, through seq and optional before seq', async () => {
+  const calls = [];
+  const api = new PocketApi({
+    base: 'https://example.test',
+    fetch: async (url, init) => {
+      const request = JSON.parse(init.body);
+      calls.push(request);
+      return jsonResponse({ type: 'server-response', rpcId: request.rpcId, result: { ok: true, value: { records: [], hasMore: true } } });
+    },
+  });
+  const value = await api.page('s1', 100, { maxMessages: 20, beforeSeq: 50 });
+  assert.equal(value.hasMore, true);
+  const args = calls[0].payload.args.request;
+  assert.deepEqual(args.address, { kind: 'session', sessionId: 's1' });
+  assert.equal(args.throughSeq, 100);
+  assert.equal(args.maxMessages, 20);
+  assert.equal(args.beforeSeq, 50);
+
+  await api.page('s1', 10);
+  assert.equal('beforeSeq' in calls[1].payload.args.request, false);
+  assert.equal(calls[1].payload.args.request.maxMessages, 80);
+});
+
 test('answerEvent posts the waterfall result', async () => {
   const calls = [];
   const api = new PocketApi({

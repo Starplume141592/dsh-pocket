@@ -55,6 +55,7 @@ export class Timeline {
     this.approvals = new Map();
     this.seen = new Set();
     this.lastSeq = -1;
+    this.firstSeq = -1;
     this.cursor = -1;
     this.running = false;
     this.title = options.title || '';
@@ -74,6 +75,7 @@ export class Timeline {
     this.approvals.clear();
     this.seen.clear();
     this.lastSeq = -1;
+    this.firstSeq = -1;
     this.cursor = Number.isFinite(cursor) ? cursor : -1;
     this.gap = false;
     this.running = options.running === true;
@@ -81,6 +83,43 @@ export class Timeline {
     for (const record of records || []) this.apply(record?.event ?? record, { snapshot: true });
     this.lastSeq = Math.max(this.lastSeq, this.cursor);
     this.notify();
+  }
+
+  /** Merge an older page of records in front of the current timeline.
+   * Keeps lastSeq/running/title untouched; ignores overlaps and already-seen seq.
+   * Returns the number of newly accepted events.
+   */
+  prepend(records) {
+    const cutoff = this.firstSeq;
+    const batch = (records || [])
+      .map((record) => record?.event ?? record)
+      .filter((event) => event && typeof event.seq === 'number' && !this.seen.has(event.seq))
+      .filter((event) => cutoff < 0 || event.seq < cutoff)
+      .sort((a, b) => a.seq - b.seq);
+    if (!batch.length) return 0;
+
+    const temp = new Timeline({ title: this.title });
+    temp.reset(batch, batch[batch.length - 1].seq, { title: this.title });
+
+    const existingTools = new Set(this.tools.keys());
+    const existingApprovals = new Set(this.approvals.keys());
+    const olderItems = temp.items.filter((item) => {
+      if (item.kind === 'tool' && existingTools.has(item.id)) return false;
+      if (item.kind === 'approval' && existingApprovals.has(item.key)) return false;
+      return true;
+    });
+
+    this.items = olderItems.concat(this.items);
+    for (const [callId, tool] of temp.tools) {
+      if (!this.tools.has(callId)) this.tools.set(callId, tool);
+    }
+    for (const [id, approval] of temp.approvals) {
+      if (!this.approvals.has(id)) this.approvals.set(id, approval);
+    }
+    for (const seq of temp.seen) this.seen.add(seq);
+    this.firstSeq = batch[0].seq;
+    this.notify();
+    return batch.length;
   }
 
   apply(event, options = {}) {
@@ -96,6 +135,7 @@ export class Timeline {
     }
     this.seen.add(event.seq);
     if (event.seq > this.lastSeq) this.lastSeq = event.seq;
+    if (this.firstSeq < 0 || event.seq < this.firstSeq) this.firstSeq = event.seq;
     const data = event.data || {};
     const time = event.time || Date.now();
     switch (event.type) {

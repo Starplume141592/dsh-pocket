@@ -97,6 +97,63 @@ test('describeTool prefers description and handles invalid json', () => {
   assert.equal(describeTool('unknown', 'not-json'), 'unknown');
 });
 
+test('prepend merges older messages in front without moving lastSeq', () => {
+  const timeline = new Timeline();
+  timeline.reset([
+    { type: 'event', event: event(10, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'newer' }] }) },
+    { type: 'event', event: event(11, 'turn/start', { turn: 1 }) },
+  ], 11, { running: true, title: 'Session A' });
+
+  const added = timeline.prepend([
+    { type: 'event', event: event(8, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'older' }] }) },
+    { type: 'event', event: event(9, 'turn/end', { reason: { kind: 'done' } }) },
+  ]);
+
+  assert.equal(added, 2);
+  assert.deepEqual(timeline.items.map((item) => item.text), ['older', 'newer']);
+  assert.equal(timeline.firstSeq, 8);
+  assert.equal(timeline.lastSeq, 11);
+  assert.equal(timeline.running, true);
+  assert.equal(timeline.title, 'Session A');
+  assert.equal(timeline.gap, false);
+});
+
+test('prepend ignores overlaps and does not duplicate an existing tool card', () => {
+  const timeline = new Timeline();
+  timeline.reset([
+    { type: 'event', event: event(10, 'tool/result', { message: { toolCallId: 'c1', isError: false, content: [{ type: 'text', text: 'done' }] } }) },
+  ], 10);
+
+  const added = timeline.prepend([
+    { type: 'event', event: event(8, 'tool/call', { callId: 'c1', name: 'pwsh', arguments: '{"command":"ls"}' }) },
+    { type: 'event', event: event(9, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'older' }] }) },
+    { type: 'event', event: event(10, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'duplicate' }] }) },
+  ]);
+
+  assert.equal(added, 2);
+  assert.equal(timeline.items.filter((item) => item.kind === 'tool').length, 1);
+  assert.equal(timeline.items[0].text, 'older');
+  assert.equal(timeline.items[1].kind, 'tool');
+  assert.equal(timeline.firstSeq, 8);
+  assert.equal(timeline.lastSeq, 10);
+});
+
+test('prepend keeps approval decisions from the older page', () => {
+  const timeline = new Timeline();
+  timeline.reset([
+    { type: 'event', event: event(20, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'newer' }] }) },
+  ], 20);
+
+  timeline.prepend([
+    { type: 'event', event: event(8, 'approval/asked', { id: 'a1', toolName: 'pwsh', callId: 'c1', reason: 'need write' }) },
+    { type: 'event', event: event(9, 'approval/decided', { id: 'a1', outcome: 'allowed-once' }) },
+  ]);
+
+  assert.equal(timeline.items[0].kind, 'approval');
+  assert.equal(timeline.items[0].status, 'allowed');
+  assert.equal(timeline.approvals.get('a1').status, 'allowed');
+});
+
 test('formatRelative produces stable buckets', () => {
   const now = 10_000_000;
   assert.equal(formatRelative(now - 30_000, now), '刚刚');

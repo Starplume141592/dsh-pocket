@@ -43,6 +43,13 @@
   --faint: #8b94a7;
   --shadow-card: 0 18px 50px rgba(27, 35, 56, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
+[data-accent="blue"] { --blue: #2f7cff; --blue-2: #18b6ff; }
+[data-accent="green"] { --blue: #3ddc97; --blue-2: #22b8a0; }
+[data-accent="orange"] { --blue: #ffb454; --blue-2: #ff7a59; }
+[data-density="compact"] .msg { margin-bottom: 12px; }
+[data-density="compact"] .session-item { padding-top: 10px; padding-bottom: 10px; }
+[data-density="compact"] .setting-row { padding-top: 8px; padding-bottom: 8px; }
+[data-density="compact"] .chat-scroll { padding-bottom: 14px; }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scrollbar-width: none; }
@@ -132,7 +139,7 @@ svg { display: block; }
 .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .mark {
   width: 34px; height: 34px; border-radius: 11px; flex: none;
-  background: linear-gradient(145deg, #6b8cff, #5b3cff 70%);
+  background: linear-gradient(145deg, var(--blue), var(--blue-2) 70%);
   box-shadow: 0 6px 18px rgba(91, 91, 255, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
   display: grid; place-items: center; color: #fff; position: relative; overflow: hidden;
 }
@@ -150,6 +157,17 @@ svg { display: block; }
 .conn-pill.offline { color: var(--amber); background: rgba(255, 180, 84, 0.08); border-color: rgba(255, 180, 84, 0.2); }
 .conn-pill .dot { width: 6px; height: 6px; box-shadow: none; }
 
+.offline-strip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 20px; font-size: 12px; font-weight: 550;
+  color: var(--amber); background: rgba(255, 180, 84, 0.07);
+  border-bottom: 1px solid rgba(255, 180, 84, 0.14);
+}
+.offline-strip .dot { width: 6px; height: 6px; box-shadow: none; }
+.offline-strip .offline-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offline-strip .text-btn { color: var(--amber); font-weight: 700; }
+[data-theme="light"] .offline-strip { background: rgba(180, 100, 0, 0.06); }
+
 /* ── 首页 Hero ────────────────────────────────────────────────── */
 .hero { padding: 10px 20px 0; }
 .eyebrow { margin: 0 0 10px; color: var(--faint); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -159,7 +177,7 @@ svg { display: block; }
 }
 .hero h1 span { color: var(--muted); font-weight: 640; }
 .hero h1 .grad {
-  background: linear-gradient(100deg, #a8bcff 0%, #7a8fff 40%, #b18cff 100%);
+  background: linear-gradient(100deg, var(--blue-2) 0%, var(--blue) 45%, var(--blue-2) 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .hero-sub { margin: 10px 0 0; color: var(--muted); font-size: 14px; max-width: 32ch; }
@@ -232,7 +250,7 @@ svg { display: block; }
 .running-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
 .running-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .progress { flex: 1; height: 5px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
-.progress i { display: block; height: 100%; width: 46%; border-radius: inherit; background: linear-gradient(90deg, #5b7cff, #9a6bff); animation: progressGlow 2.4s ease-in-out infinite; }
+.progress i { display: block; height: 100%; width: 46%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), var(--blue-2)); animation: progressGlow 2.4s ease-in-out infinite; }
 @keyframes progressGlow { 0%,100% { opacity: .8; } 50% { opacity: 1; } }
 .running-foot .btn-ghost { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; font-weight: 650; }
 
@@ -284,7 +302,7 @@ svg { display: block; }
 .tab.active .icon { transform: translateY(-1px); }
 .tab.active::before {
   content: ""; position: absolute; top: 2px; width: 26px; height: 3px; border-radius: 99px;
-  background: linear-gradient(90deg, var(--blue), #9a6bff); box-shadow: 0 0 14px rgba(91,124,255,.65);
+  background: linear-gradient(90deg, var(--blue), var(--blue-2)); box-shadow: 0 0 14px rgba(91,124,255,.65);
 }
 .tab-fab {
   flex: none; width: 58px; display: grid; place-items: center;
@@ -320,12 +338,20 @@ svg { display: block; }
 .chat-inner { max-width: 640px; margin: 0 auto; }
 .day-divider { display: flex; align-items: center; justify-content: center; margin: 12px 0 20px; color: var(--faint); font-size: 11px; font-weight: 600; }
 .day-divider::before, .day-divider::after { content: ""; height: 1px; width: 36px; background: var(--line); margin: 0 10px; }
+.load-earlier { display: flex; justify-content: center; padding: 2px 0 14px; }
+.load-earlier .text-btn {
+  padding: 6px 13px; border-radius: 999px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.025); color: var(--muted); font-size: 12px;
+}
+.load-earlier .text-btn:disabled { opacity: 0.55; }
+.load-earlier.done { color: var(--faint); font-size: 11px; }
+[data-theme="light"] .load-earlier .text-btn { background: rgba(0, 0, 0, 0.02); }
 .msg { display: flex; margin-bottom: 18px; animation: msgIn .3s var(--ease) both; }
 @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .msg.user { justify-content: flex-end; }
 .msg.user .bubble {
   max-width: 82%; padding: 11px 15px; border-radius: 20px 20px 6px 20px;
-  background: linear-gradient(145deg, #5b7cff, #5b57ff); color: #fff;
+  background: linear-gradient(145deg, var(--blue), var(--blue-2)); color: #fff;
   font-size: 14.5px; line-height: 1.5; box-shadow: 0 8px 24px rgba(80,95,255,.25);
   word-break: break-word;
 }
@@ -478,7 +504,7 @@ svg { display: block; }
 .connect-hero .mark.lg svg { width: 30px; height: 30px; }
 .connect-eyebrow { margin: 0 0 10px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
 .connect-hero h1 { margin: 0; font-size: 38px; line-height: 1.12; letter-spacing: -.045em; font-weight: 760; }
-.connect-hero h1 .grad { background: linear-gradient(100deg, #a8bcff, #8b5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.connect-hero h1 .grad { background: linear-gradient(100deg, var(--blue-2), var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .connect-sub { margin: 14px 0 0; color: var(--muted); font-size: 14px; line-height: 1.65; max-width: 36ch; }
 .connect-form { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 7px; }

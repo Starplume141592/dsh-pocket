@@ -11,6 +11,7 @@
 | **Cloudflare Tunnel + 自己的域名** | 域名年费（几十元）+ 免费 Cloudflare | 低 | 想要自己的品牌域名、长期稳定 |
 | VPS + frp / Caddy | VPS 月费 + 域名 | 中 | 有服务器、想完全自控 |
 | 纯局域网 | 0 | 最低 | 只在家里用；没有 HTTPS/PWA 安装 |
+| **内嵌 Funnel（tsnet，免安装）** | 0 | 低 | 不想装 Tailscale / 没有管理员；每人一个 Tailscale 账号 |
 
 下面先写当前在用的 Tailscale Funnel，再写 Cloudflare Tunnel；文末给 VPS 方案的要点。
 
@@ -259,3 +260,33 @@ dsh.example.com {
 
 限制：HTTP 不是安全上下文，Chrome 不会给 PWA 安装提示、Service Worker 和推送也不可用；
 只是「能用网页」，体验不如 HTTPS。要完整体验还是走 A 或 B。
+
+---
+
+## 方案 E：内嵌 Funnel（tsnet，免安装）
+
+原理：插件拉起 `sidecar/tsnet-sidecar.exe`，在进程内跑一个用户态 Tailscale 节点，用
+`ListenFunnel` 把 `127.0.0.1:8470` 暴露成 `https://<主机名>.<tailnet>.ts.net`。
+不需要安装 Tailscale、不需要管理员、不需要开端口；Funnel 的 443 是 tsnet 虚拟端口，
+不占本机 443，也不创建虚拟网卡、不改路由和 DNS。
+
+### 准备
+
+1. 到 Actions 跑 `sidecar` workflow，下载 `tsnet-sidecar-windows-amd64` 产物；
+   或本机 `cd sidecar && go mod tidy && go build -o tsnet-sidecar.exe .`
+2. 把 `tsnet-sidecar.exe` 放到 `%USERPROFILE%\.dsh-mobile\bin\`（或放进 `tools\` 后跑 `install.ps1`）。
+
+### 首次启用
+
+1. DSH → 设置 → 连接手机 → 勾「启用内嵌 Funnel」→ 点「启动」。
+2. 点「打开登录页」，用 Google/GitHub 登录 Tailscale（链接也可以发到手机上登录）。
+3. 到 <https://login.tailscale.com/f/funnel> 开一次 HTTPS 和 Funnel（每个 tailnet 一次）。
+4. 地址会自动回填「公网地址」；生成二维码配对即可。
+
+### 注意
+
+- 每个跑 DSH 的人需要自己的 Tailscale 账号（一次性），这是 Tailscale 的模式。
+- 地址固定，重启电脑/DSH 不变；换名改 `state.json` 的 `tsnet.hostname`（默认 `pocket`）。
+- 不用时在卡片里「停止」，或在 Tailscale 控制台移除该设备。
+- Funnel 是公网入口，安全仍靠设备配对 + 设备 cookie。
+- Funnel 入口在境外，延迟和方案 D 同级；要更低延迟还是走方案 B 或 IPv6（如果学校放通）。

@@ -6,9 +6,10 @@
 > **Pocket 是 DSH 的伴生 App，不是另一个聊天机器人。**
 > 它不重新实现 Agent，只消费 DSH 的 Session / 事件流 / 审批 API。
 
-> 状态：**v0.4-dev — 真实 DSH 会话已接通**。
+> 状态：**v0.4-dev — 真实 DSH 会话已接通，离线快照可用**。
 > 会话列表、快照 + WebSocket 增量、发消息、停止、token 级流式输出都已验证；
-> Android Capacitor 工程已生成，配对引导页已加入；系统通知与签名发布还在进行。
+> 断网/隧道挂掉时打开上次快照，恢复后自动重连；Android Capacitor 工程已生成；
+> 系统通知与签名发布还在进行。
 
 ![首页](docs/assets/pocket-home.png)
 ![会话](docs/assets/pocket-chat.png)
@@ -39,6 +40,10 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - 首页 / 会话 / 活动 / 设置四栏，底部 Tab + 新会话 FAB
 - 真实 DSH 数据：session/list、session/create、session/follow、session/prompt、session/cancel
 - 快照 + WebSocket 增量合并，按 seq 去重，断线自动重开 follow
+- **离线快照**：会话列表 + 最近 120 条消息存本地（300 KB / 12 个会话）；断网冷启动直接显示，离线也能翻页
+- **加载更早**：长会话向上分页（`session/page`），一次 10/20/40 条消息（可设），加载后保持滚动位置
+- **移动端总开关**：设置卡一键停/启网关、通知、隧道；关掉后桌面设置卡仍可重新打开
+- **自定义**：主题色、紧凑模式、活动页显隐、每页条数、离线快照开关
 - token 级流式输出（reasoning 不刷屏，正文逐字出现）
 - 工具卡片折叠、审批卡片、运行状态、自动标题
 - 过滤 runtime-context / skill-catalog / time-context 等注入消息，只显示人类消息
@@ -46,9 +51,10 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - PWA manifest / Service Worker / 离线壳 / 安装引导
 - Gateway 新增 `/__dshapp/` 静态路由，可直接从公网 HTTPS 地址安装 PWA
 - Web Push 系统通知：Pocket 子路径 SW 订阅，测试通知 sent=1 / failed=0
-- 网关 39 项单测 + App 14 项传输/时间线测试通过
+- 网关上游 cookie 过期后自动刷新并重试一次（含 POST 请求体）
+- 网关 49 项单测 + App 31 项传输/时间线/离线缓存/偏好测试通过
 
-**还在进行**：签名 APK、局域网/外网连接方式切换。
+**还在进行**：签名 APK（工具链已就绪，构建中）、局域网/外网连接方式切换、内嵌 tsnet Funnel（sidecar 已编译，等一次 Tailscale 登录）。
 Android WebView 的 Web Push 不保证可用；系统级通知需要后续接 FCM 或原生通知桥。
 
 审批链路已真机验证：approval/request → 允许一次 → 工具执行 → 状态回到已同步。
@@ -96,6 +102,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 配对与公网入口见 [docs/remote-domain.md](docs/remote-domain.md)。
 重启 DSH 后，手机打开 **https://你的地址/__dshapp/** 即可使用 Pocket 并安装到主屏幕。
 完整的桌面 UI 仍在根路径，高级功能（终端、文件树）可以继续走桌面 UI。
+
+## 内嵌 Funnel（不用装 Tailscale）
+
+插件可以自己跑一个用户态 Tailscale 节点（`sidecar/`，基于 `tsnet`）：不装 Tailscale、不要管理员、
+不改防火墙，手机只装 Pocket 就能拿到固定的 `https://<主机名>.<tailnet>.ts.net` 地址。
+
+1. 构建 sidecar（二选一）：
+   - 推到 GitHub 跑 `sidecar` workflow，下载 `tsnet-sidecar-windows-amd64` 产物；
+   - 本机装 Go 后：`cd sidecar` → `go mod tidy` → `go build -o tsnet-sidecar.exe .`
+2. 把 `tsnet-sidecar.exe` 放到 `%USERPROFILE%\.dsh-mobile\bin\`（或放进 `tools\` 后跑 `install.ps1`）。
+3. DSH → 设置 → 连接手机 → 勾「启用内嵌 Funnel」→「启动」。
+4. 点「打开登录页」登录 Tailscale；再到 <https://login.tailscale.com/f/funnel> 开一次 HTTPS + Funnel。
+5. 地址会自动填进「公网地址」，手机扫码配对即可。
+
+每个用户需要自己的 Tailscale 账号（一次性）；Funnel 入口在境外，延迟和现在的 Funnel 同级。
+细节见 [sidecar/README.md](sidecar/README.md)。
 
 ## Android
 
