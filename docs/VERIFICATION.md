@@ -70,12 +70,12 @@ node --test --test-isolation=none --test-force-exit \
   tests/store.test.mjs tests/tunnel.test.mjs tests/notify.test.mjs \
   tests/tsnet.test.mjs tests/upstream-retry.test.mjs
 
-tests 50 gateway + 31 app
-pass 81
+tests 50 gateway + 34 app
+pass 84
 fail 0
 ~~~
 
-App 传输/时间线/缓存/偏好测试覆盖：
+App 传输/时间线/缓存/偏好/更新测试覆盖：
 
 - RPC envelope、错误结果、prompt 幂等 requestId、$events/result
 - session/follow 的 mux open 帧与 snapshot/event/assistant-stream 路由
@@ -86,6 +86,7 @@ App 传输/时间线/缓存/偏好测试覆盖：
 - 离线缓存：会话/聊天往返、120 条截断、300 KB 字节上限、12 个会话 / 30 天清理、
   localStorage 配额淘汰、坏 JSON、待审批卡不落盘
 - 偏好：默认值、非法值忽略、深拷贝、持久化与 reset
+- 更新：版本号比较、入口候选去重、发布页配置超时/失败回退
 
 ## 5.1 离线快照（22:25）
 
@@ -140,25 +141,25 @@ App 传输/时间线/缓存/偏好测试覆盖：
 点两次：可见 14 -> 34 -> 54，toast「已显示更早的离线缓存」
 ~~~
 
-`sw.js` 为 `pocket-shell-v6`；安装副本 `prefs.js` 返回 200。
+`sw.js` 为 `pocket-shell-v7`；安装副本 `prefs.js` 返回 200。
 
-## 5.5 Android debug APK（23:15）
+## 5.5 Android debug APK（23:47）
 
 ~~~text
 node scripts/build-mobile-web.mjs
 npx cap sync android
 tools\gradle\gradle-8.14.3\bin\gradle.bat assembleDebug --no-daemon
-=> BUILD SUCCESSFUL in 16s
-=> app-debug.apk 4,150,361 bytes
+=> BUILD SUCCESSFUL in 19s
+=> app-debug.apk 4,152,786 bytes
 
 aapt2 badging:
   package app.pocket.dsh
-  versionName 0.4.0 / minSdk 24 / targetSdk 36
-assets/public/{app,cache,prefs,timeline}.js 已打进 APK
+  versionCode 2 / versionName 0.4.1 / minSdk 24 / targetSdk 36
+assets/public/{app,update,cache,prefs,timeline}.js 已打进 APK
 ~~~
 
 产物：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
-（另一份 `dist/Pocket-0.4.0-debug.apk`，不提交）。
+（另一份 `dist/Pocket-0.4.1-debug.apk`，不提交）。
 
 ## 5.6 公网入口与配对（23:30）
 
@@ -181,11 +182,24 @@ assets/public/{app,cache,prefs,timeline}.js 已打进 APK
 - manifest / app.js 的 content-type、cache-control、service-worker-allowed
 - 原有配对、代理、HTML 注入、WS 升级、推送、隧道、吊销
 
+## 5.7 更新能力（23:50）
+
+- **APK 0.4.1 远程启动**：本地壳读发布页 `config.json` 的 `publicUrl` 和上次保存地址，
+  逐个做 `/__dshm/health`，成功就 `location.replace(base + '/__dshapp/')`；
+  失败回退本地壳/连接页。之后 UI 跟网关资源走，不需要重装 APK。
+- **PWA SW v7**：`controllerchange` 时如果页面可见、没在跑任务、没在输入，提示后自动刷新；
+  否则提示「下次打开生效」。
+- **检查更新**：设置 → 关于 → 检查更新，读 `config.json` 的 `version`/`apkUrl`，
+  比 `APP_VERSION`（0.4.1）新就打开下载页。
+- 发布页 `config.json` 已升到 0.4.1，APK 资产名 `Pocket-0.4.1-debug.apk`。
+- 测试：新增 `tests/app/update.test.mjs` 3 项；总 **84/84**。
+- 限制：原生壳（图标/权限/Capacitor）仍需重装；debug 签名必须一致才能覆盖安装。
+
 ## 6. 已知问题
 
 - 审批 waterfall 已真机跑通（allowed-once）；尚未验证 rejected / cancelled 的界面回滚。
 - 预览服务器需要浏览器已有设备 cookie；否则会回退演示数据。
-- debug APK 已构建（`app.pocket.dsh` 0.4.0）；release 签名、上架、启动图/原生通知还没做。
+- debug APK 已构建（`app.pocket.dsh` 0.4.1 / versionCode 2）；release 签名、上架、启动图/原生通知还没做。
 - Pocket 子路径 SW 已接推送；Android WebView 的 Web Push 不保证可用，需要 FCM 或原生通知桥。
 - 默认只显示最近 14 条，可加载更早（一次 10/20/40 条，上限 200）；更细的分页锚点还没做。
 - 离线快照用 localStorage，保留最近 120 条 / 300 KB / 12 个会话；离线翻页只在这个窗口内。

@@ -55,12 +55,13 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - Gateway 新增 `/__dshapp/` 静态路由，可直接从公网 HTTPS 地址安装 PWA
 - Web Push 系统通知：Pocket 子路径 SW 订阅，测试通知 sent=1 / failed=0
 - 网关上游 cookie 过期后自动刷新并重试一次（含 POST 请求体）
-- 网关 50 项单测 + App 31 项传输/时间线/离线缓存/偏好测试通过
+- **更新能力**：APK 远程启动（UI 热更）、设置→检查更新、PWA SW 新版本自动刷新、发布页 `config.json` 热切换入口
+- 网关 50 项单测 + App 34 项传输/时间线/离线缓存/偏好/更新测试通过
 
 **还在进行**：release 签名 APK、局域网/外网连接方式切换、内嵌 tsnet Funnel 的 HTTPS 证书
 （sidecar 已编译并登录，ACME 证书还在重试；临时 Cloudflare 隧道已可用）。
 debug APK 已构建：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
-（4.2 MB，包名 `app.pocket.dsh`，versionName 0.4.0）。
+（4.2 MB，包名 `app.pocket.dsh`，versionName 0.4.1）。
 Android WebView 的 Web Push 不保证可用；系统级通知需要后续接 FCM 或原生通知桥。
 
 审批链路已真机验证：approval/request → 允许一次 → 工具执行 → 状态回到已同步。
@@ -147,7 +148,7 @@ cd android
 # => app\build\outputs\apk\debug\app-debug.apk
 ~~~
 
-没有本机工具链时，用 GitHub Actions：推送 tag（例如 v0.4.0）或手动运行 **android** workflow，
+没有本机工具链时，用 GitHub Actions：推送 tag（例如 v0.4.1）或手动运行 **android** workflow，
 会产出 `pocket-debug-apk` artifact。
 
 Android 壳首次启动会显示「连接你的 DSH」：输入公网 HTTPS 地址后，WebView 会导航到该地址下的 `/__dshapp/`，

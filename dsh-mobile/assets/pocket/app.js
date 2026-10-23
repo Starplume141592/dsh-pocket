@@ -5,6 +5,7 @@ import { PocketApi, sessionSummary } from './api.js';
 import { Timeline, formatRelative } from './timeline.js';
 import { createCache, CHAT_LIMIT } from './cache.js';
 import { createPrefs, ACCENTS, PAGE_SIZES } from './prefs.js';
+import { APP_VERSION, fetchReleaseConfig, entryCandidates, isNewerVersion, normalizeBase } from './update.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -35,6 +36,7 @@ const live = {
   renderLimit: 14,
   pageLoading: false,
   noMoreHistory: false,
+  updateConfig: null,
 };
 
 const now = new Date();
@@ -405,7 +407,8 @@ function renderSettings() {
         '<div class="setting-row"><span class="setting-ico">' + icon('shield', 'sm') + '</span><div class="setting-main"><div class="setting-title">设备与安全</div><div class="setting-sub">在电脑端管理已配对设备</div></div>' + icon('chevron', 'sm') + '</div>' +
       '</div></div>' +
       '<div class="settings-group"><p class="settings-label">关于</p><div class="settings-card">' +
-        '<div class="setting-row"><span class="setting-ico">' + icon('chats', 'sm') + '</span><div class="setting-main"><div class="setting-title">Pocket</div><div class="setting-sub">DSH 随行 · 0.4.0 (build 1)</div></div></div>' +
+        '<div class="setting-row"><span class="setting-ico">' + icon('refresh', 'sm') + '</span><div class="setting-main"><div class="setting-title">检查更新</div><div class="setting-sub">当前 ' + APP_VERSION + ' · 从发布页读取</div></div><button class="text-btn" data-action="check-update">检查</button></div>' +
+        '<div class="setting-row"><span class="setting-ico">' + icon('chats', 'sm') + '</span><div class="setting-main"><div class="setting-title">Pocket</div><div class="setting-sub">DSH 随行 · ' + APP_VERSION + ' (build 1)</div></div></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('plus', 'sm') + '</span><div class="setting-main"><div class="setting-title">安装到桌面</div><div class="setting-sub">' + (isStandalone() ? '已安装' : '全屏打开，像 App 一样') + '</div></div><button class="text-btn" data-action="install-app">' + (isStandalone() ? '已安装' : '安装') + '</button></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('code', 'sm') + '</span><div class="setting-main"><div class="setting-title">开源与反馈</div><div class="setting-sub">GitHub · MIT License</div></div>' + icon('chevron', 'sm') + '</div>' +
       '</div></div>' +
@@ -468,12 +471,6 @@ function render() {
 /* ── 首次连接 / 配对提示 ─────────────────────────────────────── */
 function isNativeShell() {
   return (location.protocol === 'https:' && location.hostname === 'localhost') || location.protocol === 'capacitor:';
-}
-function normalizeBase(value) {
-  let text = String(value || '').trim();
-  if (!text) return '';
-  if (!/^https?:\/\//i.test(text)) text = 'https://' + text;
-  return text.replace(/\/+$/, '');
 }
 function renderConnect(error) {
   let saved = '';
@@ -1352,12 +1349,35 @@ function toggle(key) {
   render();
   toast(state.settings[key] ? '已开启' : '已关闭');
 }
+let updateChecking = false;
+async function checkForUpdate() {
+  if (updateChecking) return;
+  updateChecking = true;
+  toast('正在检查更新…');
+  try {
+    const config = await fetchReleaseConfig();
+    if (!config) { toast('检查更新失败：发布页不可达'); return; }
+    if (!isNewerVersion(config.version, APP_VERSION)) { toast('已是最新版本 ' + APP_VERSION); return; }
+    live.updateConfig = config;
+    openSheet('发现新版本 ' + config.version, '当前 ' + APP_VERSION + ' · 下载后覆盖安装', [
+      { action: 'download-update', icon: 'plus', title: '下载 APK', sub: config.apkUrl ? '打开浏览器下载' : '发布页未配置下载地址' },
+      { action: 'about', icon: 'shield', title: '稍后再说', sub: '当前版本可继续使用' },
+    ]);
+  } finally {
+    updateChecking = false;
+  }
+}
 function handleSheet(action) {
   if (action === 'theme-dark' || action === 'theme-light' || action === 'theme-system') {
     state.theme = action === 'theme-light' ? 'light' : 'dark';
     localStorage.setItem('pocket-theme', state.theme);
     document.documentElement.dataset.theme = state.theme;
     toast(action === 'theme-light' ? '已切换浅色' : '已切换深色');
+  }
+  if (action === 'download-update') {
+    const url = live.updateConfig?.apkUrl;
+    if (url) window.open(url, '_blank', 'noopener');
+    else toast('发布页还没有可用的 APK');
   }
   if (action.startsWith('accent-')) {
     const accent = action.slice('accent-'.length);
@@ -1368,10 +1388,11 @@ function handleSheet(action) {
       if (state.route.name === 'settings') render();
     }
   }
-  if (action === 'about') toast('Pocket 0.4.0 · MIT');
+  if (action === 'about') toast('Pocket ' + APP_VERSION + ' · MIT');
 }
 function onAction(action, el) {
   if (action === 'connect') return submitConnect();
+  if (action === 'check-update') { checkForUpdate(); return; }
   if (action === 'pref-accent') {
     openSheet('主题色', '选一个强调色，立即生效', ACCENTS.map((accent) => ({
       action: 'accent-' + accent,
@@ -1537,10 +1558,46 @@ document.addEventListener('click', (e) => {
 window.addEventListener('hashchange', render);
 
 /* 启动 */
-applyPrefs();
-document.documentElement.dataset.theme = state.theme;
-render();
-bootstrap();
+function startApp() {
+  applyPrefs();
+  document.documentElement.dataset.theme = state.theme;
+  render();
+  bootstrap();
+}
+
+async function nativeBoot() {
+  if (!isNativeShell()) return false;
+  let saved = '';
+  try { saved = localStorage.getItem('pocket-base') || ''; } catch { /* ignore */ }
+  const config = await fetchReleaseConfig({ timeoutMs: 2500 });
+  const candidates = entryCandidates(saved, config);
+  for (const base of candidates) {
+    try {
+      const res = await fetch(base + '/__dshm/health', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(3500),
+      });
+      if (!res.ok) continue;
+      try { localStorage.setItem('pocket-base', base); } catch { /* ignore */ }
+      location.replace(base + '/__dshapp/');
+      return true;
+    } catch {
+      /* 试下一个入口 */
+    }
+  }
+  return false;
+}
+
+if (isNativeShell()) {
+  $('#app').innerHTML = '<div class="connect-view view-enter"><div class="connect-hero">' + mark('lg') +
+    '<p class="connect-eyebrow">POCKET · DSH 随行</p><h1>正在连接 <span class="grad">DSH</span></h1>' +
+    '<p class="connect-sub">读取当前入口并检查网络…</p></div></div>';
+  nativeBoot()
+    .then((redirected) => { if (!redirected) startApp(); })
+    .catch(() => startApp());
+} else {
+  startApp();
+}
 
 if (localStorage.getItem('pocket-debug') === '1') {
   window.__pocket = { live, state, api };
@@ -1559,6 +1616,20 @@ window.addEventListener('appinstalled', () => {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* http LAN 下可能失败 */ });
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then((registration) => {
+        registration.update().catch(() => {});
+        if (!hadController) return;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (document.visibilityState !== 'visible') return;
+          if (state.chat.running) { toast('新版本已就绪，下次打开生效'); return; }
+          const tag = document.activeElement && document.activeElement.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA') { toast('新版本已就绪，下次打开生效'); return; }
+          toast('新版本已就绪，正在刷新…');
+          setTimeout(() => location.reload(), 900);
+        });
+      })
+      .catch(() => { /* http LAN 下可能失败 */ });
   });
 }

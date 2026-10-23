@@ -38,11 +38,12 @@ jobs:
           node --check ../app/timeline.js
           node --check ../app/cache.js
           node --check ../app/prefs.js
+          node --check ../app/update.js
 
       - name: Validate PWA manifest
         run: node -e "JSON.parse(require('fs').readFileSync('../app/manifest.webmanifest','utf8'))"
 
-      - name: App transport, timeline, offline and preference tests
+      - name: App transport, timeline, offline, preference and update tests
         working-directory: .
         run: >
           node --test --test-isolation=none --test-force-exit
@@ -50,6 +51,7 @@ jobs:
           tests/app/timeline.test.mjs
           tests/app/cache.test.mjs
           tests/app/prefs.test.mjs
+          tests/app/update.test.mjs
 
       - name: Gateway tests
         run: >

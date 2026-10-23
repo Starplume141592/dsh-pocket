@@ -1,10 +1,10 @@
 /* Pocket service worker — app shell + push notifications.
  * Never cache session/API traffic.
  */
-const CACHE = 'pocket-shell-v6';
+const CACHE = 'pocket-shell-v7';
 const SHELL = [
   './', './index.html', './styles.css', './app.js',
-  './api.js', './timeline.js', './cache.js', './prefs.js',
+  './api.js', './timeline.js', './cache.js', './prefs.js', './update.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png',
 ];
 self.addEventListener('install', (event) => {

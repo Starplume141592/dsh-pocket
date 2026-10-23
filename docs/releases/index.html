@@ -108,7 +108,7 @@
         <div class="brand-name">Pocket</div>
         <div class="brand-sub">DSH 随行 · 下载与发布</div>
       </div>
-      <div class="badge"><span class="dot"></span><span id="version">v0.4.0-dev</span></div>
+      <div class="badge"><span class="dot"></span><span id="version">v0.4.1-dev</span></div>
     </header>
 
     <section class="hero">
@@ -138,7 +138,7 @@
 
       <section class="card">
         <h2>这个版本有什么</h2>
-        <div class="sub">v0.4.0-dev · Android debug</div>
+        <div class="sub">v0.4.1-dev · Android debug</div>
         <ul class="notes" id="notes">
           <li>离线快照 120 条消息，断网可翻页</li>
           <li>加载更早 / 每页 10·20·40 条</li>
@@ -168,7 +168,7 @@
         if (res.ok) cfg = await res.json();
       } catch (error) { /* 本地 file:// 预览时没有 fetch，使用默认值 */ }
       cfg = cfg || {};
-      var version = cfg.version || '0.4.0-dev';
+      var version = cfg.version || '0.4.1-dev';
       var publicUrl = String(cfg.publicUrl || '').replace(/\/+$/, '');
       var appPath = cfg.appPath || '/__dshapp/';
       var appUrl = publicUrl ? publicUrl + appPath : '';
