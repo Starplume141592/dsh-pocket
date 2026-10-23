@@ -43,11 +43,13 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - 工具卡片折叠、审批卡片、运行状态、自动标题
 - 过滤 runtime-context / skill-catalog / time-context 等注入消息，只显示人类消息
 - 深色 / 浅色主题、安全区、减少动效、键盘适配
-- PWA manifest / Service Worker / 离线壳
+- PWA manifest / Service Worker / 离线壳 / 安装引导
 - Gateway 新增 `/__dshapp/` 静态路由，可直接从公网 HTTPS 地址安装 PWA
+- Web Push 系统通知：Pocket 子路径 SW 订阅，测试通知 sent=1 / failed=0
 - 网关 39 项单测 + App 14 项传输/时间线测试通过
 
-**还在进行**：系统通知、签名 APK、局域网/外网连接方式切换。
+**还在进行**：签名 APK、局域网/外网连接方式切换。
+Android WebView 的 Web Push 不保证可用；系统级通知需要后续接 FCM 或原生通知桥。
 
 审批链路已真机验证：approval/request → 允许一次 → 工具执行 → 状态回到已同步。
 当前 app.js 在没有设备 cookie 时会回退到演示数据，方便看设计。

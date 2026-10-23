@@ -10,6 +10,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const icon = (name, cls = '') => '<svg class="icon ' + cls + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
 
 const api = new PocketApi();
+let deferredInstallPrompt = null;
 const live = {
   ready: false,
   demo: false,
@@ -302,6 +303,7 @@ function renderSettings() {
       '</div>' +
       '<div class="settings-group"><p class="settings-label">偏好</p><div class="settings-card">' +
         '<div class="setting-row"><span class="setting-ico">' + icon('bell', 'sm') + '</span><div class="setting-main"><div class="setting-title">任务通知</div><div class="setting-sub">完成、失败与待审批</div></div><button class="switch ' + (s.notify ? 'on' : '') + '" data-action="toggle" data-key="notify" aria-label="任务通知"></button></div>' +
+        '<div class="setting-row"><span class="setting-ico">' + icon('bell', 'sm') + '</span><div class="setting-main"><div class="setting-title">测试通知</div><div class="setting-sub">确认手机能收到系统通知</div></div><button class="text-btn" data-action="test-notify">发送</button></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('bolt', 'sm') + '</span><div class="setting-main"><div class="setting-title">触感反馈</div><div class="setting-sub">发送、切换与审批时轻振</div></div><button class="switch ' + (s.haptics ? 'on' : '') + '" data-action="toggle" data-key="haptics" aria-label="触感反馈"></button></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('spark', 'sm') + '</span><div class="setting-main"><div class="setting-title">外观</div><div class="setting-sub">深色 / 浅色 / 跟随系统</div></div><button class="text-btn" data-action="appearance">深色 ' + icon('chevron', 'sm') + '</button></div>' +
       '</div></div>' +
@@ -312,6 +314,7 @@ function renderSettings() {
       '</div></div>' +
       '<div class="settings-group"><p class="settings-label">关于</p><div class="settings-card">' +
         '<div class="setting-row"><span class="setting-ico">' + icon('chats', 'sm') + '</span><div class="setting-main"><div class="setting-title">Pocket</div><div class="setting-sub">DSH 随行 · 0.3.0 (build 1)</div></div></div>' +
+        '<div class="setting-row"><span class="setting-ico">' + icon('plus', 'sm') + '</span><div class="setting-main"><div class="setting-title">安装到桌面</div><div class="setting-sub">' + (isStandalone() ? '已安装' : '全屏打开，像 App 一样') + '</div></div><button class="text-btn" data-action="install-app">' + (isStandalone() ? '已安装' : '安装') + '</button></div>' +
         '<div class="setting-row"><span class="setting-ico">' + icon('code', 'sm') + '</span><div class="setting-main"><div class="setting-title">开源与反馈</div><div class="setting-sub">GitHub · MIT License</div></div>' + icon('chevron', 'sm') + '</div>' +
       '</div></div>' +
       '<div class="about">把电脑上的 DSH 带到手机<br>会话、流式输出与审批保持同步</div>' +
@@ -788,6 +791,7 @@ async function bootstrap() {
     await refreshSessions();
     openEventsStream();
     live.ready = true;
+    syncNotifyState().then(() => { if (state.route.name === 'settings') render(); }).catch(() => {});
     const view = state.route.name;
     if (view === 'home' || view === 'sessions' || view === 'activity') render();
   } catch (error) {
@@ -823,6 +827,153 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pageshow', () => {
     if (live.ready) refreshSessions().catch(() => {});
   });
+}
+
+/* ── 系统通知（Pocket 子路径 SW） ─────────────────────────────── */
+let notifyBusy = false;
+function pushSupported() {
+  return Boolean(window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window);
+}
+function urlBase64ToUint8Array(value) {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+  return output;
+}
+async function loadPushConfig() {
+  try {
+    const res = await fetch('/__dshm/api/push/key', { cache: 'no-store', credentials: 'same-origin' });
+    if (!res.ok) return null;
+    const config = await res.json();
+    if (!config || config.ok !== true || config.enabled !== true || typeof config.publicKey !== 'string') return null;
+    return config;
+  } catch {
+    return null;
+  }
+}
+async function currentPushSubscription() {
+  if (!pushSupported()) return null;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    return await registration.pushManager.getSubscription();
+  } catch {
+    return null;
+  }
+}
+async function syncNotifyState() {
+  if (!pushSupported()) { state.settings.notify = false; return; }
+  if (Notification.permission !== 'granted') { state.settings.notify = false; return; }
+  const subscription = await currentPushSubscription();
+  state.settings.notify = Boolean(subscription);
+}
+async function subscribePush(config) {
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(config.publicKey),
+    });
+  }
+  const res = await fetch('/__dshm/api/push/subscribe', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(subscription.toJSON()),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok !== true) throw new Error(body.error || ('HTTP ' + res.status));
+  return subscription;
+}
+async function unsubscribePush() {
+  const subscription = await currentPushSubscription();
+  if (!subscription) return;
+  try {
+    await fetch('/__dshm/api/push/unsubscribe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    });
+  } catch { /* ignore */ }
+  await subscription.unsubscribe().catch(() => {});
+}
+async function toggleNotify() {
+  if (notifyBusy) return;
+  notifyBusy = true;
+  try {
+    if (!pushSupported()) {
+      toast('此浏览器不支持系统通知，请用 Chrome / Safari');
+      state.settings.notify = false;
+      render();
+      return;
+    }
+    if (state.settings.notify) {
+      await unsubscribePush();
+      state.settings.notify = false;
+      haptic();
+      render();
+      toast('已关闭任务通知');
+      return;
+    }
+    const config = await loadPushConfig();
+    if (!config) {
+      toast('先在电脑端开启「手机通知」');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      toast('通知权限被浏览器拒绝，请在站点设置里允许');
+      return;
+    }
+    const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (permission !== 'granted') {
+      toast('没有通知权限');
+      return;
+    }
+    await subscribePush(config);
+    state.settings.notify = true;
+    haptic();
+    render();
+    toast('通知已开启，完成任务会提醒你');
+  } catch (error) {
+    toast('通知开启失败：' + (error?.message || '未知错误'));
+    state.settings.notify = false;
+    render();
+  } finally {
+    notifyBusy = false;
+  }
+}
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+async function installApp() {
+  if (isStandalone()) { toast('Pocket 已经安装到桌面'); return; }
+  if (!deferredInstallPrompt) {
+    toast('打开浏览器菜单，选择「添加到主屏幕」');
+    return;
+  }
+  const prompt = deferredInstallPrompt;
+  deferredInstallPrompt = null;
+  prompt.prompt();
+  try {
+    const choice = await prompt.userChoice;
+    toast(choice?.outcome === 'accepted' ? '正在安装 Pocket…' : '已取消安装');
+  } catch {
+    toast('安装提示已失效，请用浏览器菜单安装');
+  }
+}
+async function sendTestNotify() {
+  if (!state.settings.notify) { toast('先开启任务通知'); return; }
+  try {
+    const res = await fetch('/__dshm/api/push/test', { method: 'POST', credentials: 'same-origin' });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.ok) toast('测试通知已发送');
+    else toast('发送失败：' + (body.error || ('HTTP ' + res.status)));
+  } catch (error) {
+    toast('发送失败：' + (error?.message || '网络错误'));
+  }
 }
 
 /* ── 交互 ─────────────────────────────────────────────────────── */
@@ -941,6 +1092,7 @@ async function sendHome() {
   }
 }
 function toggle(key) {
+  if (key === 'notify') { toggleNotify(); return; }
   state.settings[key] = !state.settings[key];
   haptic();
   render();
@@ -998,6 +1150,8 @@ function onAction(action, el) {
     return;
   }
   if (action === 'toggle') return toggle(el.dataset.key);
+  if (action === 'test-notify') return sendTestNotify();
+  if (action === 'install-app') return installApp();
   if (action === 'appearance') {
     openSheet('外观', '选择 Pocket 的显示方式', [
       { action: 'theme-dark', icon: 'spark', title: '深色', sub: '当前' },
@@ -1081,6 +1235,17 @@ bootstrap();
 if (localStorage.getItem('pocket-debug') === '1') {
   window.__pocket = { live, state, api };
 }
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  if (state.route.name === 'settings') render();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  toast('Pocket 已安装到桌面');
+  if (state.route.name === 'settings') render();
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
