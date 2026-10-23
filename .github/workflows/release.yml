@@ -51,15 +51,16 @@ jobs:
 
       - name: Name artifact and checksum
         run: |
-          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "Pocket-${{ github.ref_name }}-debug.apk"
-          sha256sum "Pocket-${{ github.ref_name }}-debug.apk" > "Pocket-${{ github.ref_name }}-debug.apk.sha256"
+          VERSION="${GITHUB_REF_NAME#v}"
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "Pocket-${VERSION}-debug.apk"
+          sha256sum "Pocket-${VERSION}-debug.apk" > "Pocket-${VERSION}-debug.apk.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
           name: pocket-apk
           path: |
-            Pocket-${{ github.ref_name }}-debug.apk
-            Pocket-${{ github.ref_name }}-debug.apk.sha256
+            Pocket-*-debug.apk
+            Pocket-*-debug.apk.sha256
           if-no-files-found: error
 
   sidecar:
@@ -108,8 +109,8 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            release-assets/Pocket-${{ github.ref_name }}-debug.apk
-            release-assets/Pocket-${{ github.ref_name }}-debug.apk.sha256
+            release-assets/Pocket-*-debug.apk
+            release-assets/Pocket-*-debug.apk.sha256
             release-assets/tsnet-sidecar.exe
             release-assets/tsnet-sidecar.exe.sha256
           body: |

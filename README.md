@@ -11,6 +11,9 @@
 > 断网/隧道挂掉时打开上次快照，恢复后自动重连；Android Capacitor 工程已生成；
 > 系统通知与签名发布还在进行。
 
+> 发布页（GitHub Pages 启用后）：<https://Starplume141592.github.io/dsh-pocket/releases/>
+> 发版、热更新与仓库初始化见 [RELEASE.md](RELEASE.md)。
+
 ![首页](docs/assets/pocket-home.png)
 ![会话](docs/assets/pocket-chat.png)
 
