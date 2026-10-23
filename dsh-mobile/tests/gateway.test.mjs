@@ -448,6 +448,18 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     assert.equal(stopped.body.tsnet.running, false);
   });
 
+  await t.test('沙箱 iframe 的 Origin 也能生成配对', async () => {
+    const url = `http://127.0.0.1:${harness.mainPort}/plugins/dsh-mobile/api/pair/start`;
+    for (const origin of ['null', 'http://127.0.0.1:9999']) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin },
+        body: '{}',
+      });
+      assert.equal(res.status, 200, origin);
+    }
+  });
+
   await t.test('吊销设备后立即失效', async () => {
     const devices = await desktopFetch(harness, '/state');
     const target = devices.body.devices[0];

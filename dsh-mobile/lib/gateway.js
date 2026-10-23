@@ -313,8 +313,17 @@ export function createMobileGateway({
     if (!isLoopbackAddress(req.socket.remoteAddress ?? '')) return false;
     const origin = req.headers.origin;
     if (!origin) return req.method === 'GET' || req.method === 'HEAD';
+    // Plugin cards may run in a sandboxed iframe: Origin is either "null"
+    // or another loopback port. Loopback + the DSH auth cookie is the trust boundary.
+    if (origin === 'null') return true;
     const allowed = new Set([upstream.origin, upstream.origin.replace('127.0.0.1', 'localhost')]);
-    return allowed.has(origin);
+    if (allowed.has(origin)) return true;
+    try {
+      const host = new URL(origin).hostname;
+      return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+    } catch {
+      return false;
+    }
   }
 
   function wantsHtml(req) {
