@@ -34,6 +34,17 @@
 => 界面显示 user 气泡 + DSH “OK”，状态回到“已同步”
 ~~~
 
+审批 E2E（同一会话）：
+
+~~~text
+=> 发送“用 pwsh 写到桌面 pocket-approval-test.txt，必须 danger-full-access”
+=> $events 收到 approval/request（pending=1）
+=> 会话流出现“等待审批”卡片（工具 pwsh）
+=> 点击“允许一次” -> $events/result allowed-once
+=> 工具完成，approval/decided 落定，状态回到“已同步”
+=> 助手总结：写入 ok / 回读 ok / 删除后 exists_after=False
+~~~
+
 第二次发送较长任务：
 
 ~~~text
@@ -69,7 +80,7 @@ App 传输/时间线测试覆盖：
 
 ## 5. 已知问题
 
-- 审批 waterfall 还没有在真机上制造一次真实审批；协议与 UI 已实现，待联调。
+- 审批 waterfall 已真机跑通（allowed-once）；尚未验证 rejected / cancelled 的界面回滚。
 - 预览服务器需要浏览器已有设备 cookie；否则会回退演示数据。
 - 安卓原生壳尚未生成；当前是可安装 PWA。
 - 通知仍由原有根路径 SW 负责，Pocket 子路径 SW 还没有接推送。

@@ -1078,6 +1078,10 @@ document.documentElement.dataset.theme = state.theme;
 render();
 bootstrap();
 
+if (localStorage.getItem('pocket-debug') === '1') {
+  window.__pocket = { live, state, api };
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* http LAN 下可能失败 */ });
