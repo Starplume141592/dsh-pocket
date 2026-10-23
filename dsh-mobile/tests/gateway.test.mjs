@@ -227,6 +227,27 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
     assert.match(await sw.text(), /importScripts\('\/plugins\/meow-smooth\/sw\.js'\)/);
   });
 
+
+  await t.test('Pocket App 资源可访问（未配对也可打开外壳）', async () => {
+    const page = await phoneFetch(harness, '/__dshapp/');
+    assert.equal(page.status, 200);
+    assert.ok(String(page.headers.get('content-type')).includes('text/html'));
+    const html = await page.text();
+    assert.match(html, /Pocket/);
+    assert.match(html, /manifest\.webmanifest/);
+    assert.match(html, /app\.js/);
+    const redirect = await phoneFetch(harness, '/__dshapp', { redirect: 'manual' });
+    assert.equal(redirect.status, 302);
+    assert.equal(redirect.headers.get('location'), '/__dshapp/');
+    const manifest = await phoneFetch(harness, '/__dshapp/manifest.webmanifest');
+    assert.equal(manifest.status, 200);
+    assert.ok(String(manifest.headers.get('content-type')).includes('application/manifest+json'));
+    const app = await phoneFetch(harness, '/__dshapp/app.js');
+    assert.equal(app.status, 200);
+    assert.equal(app.headers.get('service-worker-allowed'), '/__dshapp/');
+    assert.ok(String(app.headers.get('cache-control')).includes('no-cache'));
+  });
+
   let cookie = '';
   let deviceId = '';
 

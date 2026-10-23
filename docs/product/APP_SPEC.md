@@ -1,6 +1,6 @@
 # Pocket · DSH 随行 — 产品与 UI 规格
 
-> 状态：v0.3 UI 原型（可交互）
+> 状态：v0.4-dev（UI + 真实 Session API 已接通）
 > 目标：把 DSH 手机端从「桌面网页缩小版」升级为面向普通用户的旗舰 App。
 
 ## 1. 定位
@@ -133,8 +133,8 @@
 
 | 版本 | 内容 |
 |---|---|
-| v0.3（本版） | 高保真 UI + 交互原型 + 设计系统 |
-| v0.4 | 接入真实 session/list / session/follow / session/prompt / $events；替换 mock |
+| v0.3 | 高保真 UI + 交互原型 + 设计系统 |
+| v0.4（本版） | 接入真实 session/list / session/follow / session/prompt / $events；token 流式 |
 | v0.5 | 断线恢复、离线缓存、通知、审批闭环、活动中心 |
 | v0.6 | Capacitor Android、启动图、原生通知、分享入口 |
 | v1.0 | 引导页、多语言、可访问性、性能与安全审计、Release |

@@ -19,6 +19,7 @@ import { lanAddress, deviceLabel, isLoopbackAddress } from './net.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.resolve(__dirname, '..', 'assets');
+const POCKET_DIR = path.resolve(ASSETS, 'pocket');
 const COOKIE_NAME = 'dshm_device';
 const PAIRING_TTL_MS = 5 * 60 * 1000;
 const PAIRING_KEEP_MS = 30 * 60 * 1000;
@@ -333,7 +334,9 @@ export function createMobileGateway({
         resolve,
       );
       req.on('error', reject);
-      req.setTimeout(120_000, () => req.destroy(new Error('upstream timeout')));
+      // Do not impose an idle timeout on streaming responses (SSE / long-running turns).
+      // The client close handler owns cancellation instead.
+      req.setTimeout(0);
       if (body) {
         body.on('error', () => req.destroy());
         body.pipe(req);
@@ -461,7 +464,16 @@ export function createMobileGateway({
 
     const out = filterResponseHeaders(upstreamRes.headers);
     rewriteLocation(out);
+    if (type.includes('text/event-stream')) {
+      out['cache-control'] = 'no-cache, no-transform';
+      out['x-accel-buffering'] = 'no';
+      out['connection'] = 'keep-alive';
+    }
     res.writeHead(status, out);
+    if (type.includes('text/event-stream')) res.flushHeaders();
+    res.on('close', () => {
+      if (!res.writableEnded) upstreamRes.destroy();
+    });
     upstreamRes.pipe(res);
   }
 
@@ -479,6 +491,42 @@ export function createMobileGateway({
   // ── PWA 资源 ───────────────────────────────────────────────────────────
 
   const ASSET_CACHE = new Map();
+
+  function servePocket(req, res, pathname) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'GET, HEAD' });
+      res.end('method not allowed');
+      return;
+    }
+    let rel = pathname.replace(/^\/__dshapp\/?/, '') || 'index.html';
+    if (rel.endsWith('/')) rel += 'index.html';
+    rel = path.normalize(rel).replace(/^([.][.][/\\])+/, '');
+    const file = path.join(POCKET_DIR, rel);
+    if (!file.startsWith(POCKET_DIR)) {
+      res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('forbidden');
+      return;
+    }
+    let content;
+    try {
+      content = fs.readFileSync(file);
+    } catch {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('not found');
+      return;
+    }
+    const ext = path.extname(file);
+    const isShell = ext === '.html' || ext === '.js' || ext === '.css' || ext === '.webmanifest';
+    res.writeHead(200, {
+      'content-type': MIME[ext] ?? 'application/octet-stream',
+      'cache-control': isShell ? 'no-cache' : 'public, max-age=86400',
+      'content-length': content.length,
+      'x-content-type-options': 'nosniff',
+      ...(ext === '.js' ? { 'service-worker-allowed': '/__dshapp/' } : {}),
+    });
+    if (req.method === 'HEAD') res.end();
+    else res.end(content);
+  }
 
   function serveAsset(res, name, { cache = 'public, max-age=86400', extraHeaders = {} } = {}) {
     if (!ASSET_CACHE.has(name)) {
@@ -559,6 +607,15 @@ export function createMobileGateway({
     if (pathname === '/__dshm/icon-192.png') return serveAsset(res, 'icon-192.png');
     if (pathname === '/__dshm/icon-512.png') return serveAsset(res, 'icon-512.png');
     if (pathname === '/__dshm/icon-maskable-512.png') return serveAsset(res, 'icon-maskable-512.png');
+
+    if (pathname === '/__dshapp') {
+      res.writeHead(302, { location: '/__dshapp/' });
+      res.end();
+      return;
+    }
+    if (pathname.startsWith('/__dshapp/')) {
+      return servePocket(req, res, pathname);
+    }
 
     if (
       pathname === '/__dshm/pair' ||
@@ -914,6 +971,10 @@ export function createMobileGateway({
     upstreamSocket.on('error', () => socket.destroy());
     socket.on('error', () => upstreamSocket.destroy());
     socket.setTimeout(0);
+    socket.setKeepAlive(true, 30_000);
+    socket.setNoDelay(true);
+    upstreamSocket.setKeepAlive(true, 30_000);
+    upstreamSocket.setNoDelay(true);
   }
 
   /** 在线切换监听地址（127.0.0.1 ↔ 0.0.0.0），不需要重启 DSH。 */
@@ -937,6 +998,10 @@ export function createMobileGateway({
           else res.destroy();
         });
       });
+      server.requestTimeout = 0;
+      server.headersTimeout = 120_000;
+      server.keepAliveTimeout = 65_000;
+      server.timeout = 0;
       server.on('connection', (socket) => {
         sockets.add(socket);
         socket.on('close', () => sockets.delete(socket));

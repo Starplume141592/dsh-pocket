@@ -1,10 +1,32 @@
 /* Pocket — DSH 随行
- * 第一版：可直接预览的高保真 App UI，数据层随后接入 DSH Session API。
+ * 旗舰版 App UI + 真实 DSH Session API 接入。
  */
+import { PocketApi, sessionSummary } from './api.js';
+import { Timeline, formatRelative } from './timeline.js';
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icon = (name, cls = '') => '<svg class="icon ' + cls + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
+
+const api = new PocketApi();
+const live = {
+  ready: false,
+  demo: false,
+  eventStream: null,
+  eventsClientId: '',
+  follow: null,
+  currentSessionId: '',
+  timeline: null,
+  pending: new Map(),
+  sessionList: [],
+  reconnectTimer: null,
+  reconnectAttempt: 0,
+  renderQueued: false,
+  lastPaint: 0,
+  optimistic: [],
+  stream: null,
+};
 
 const now = new Date();
 const hm = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
@@ -121,12 +143,16 @@ function renderHome() {
         '<button class="chip" data-action="new-chat">' + icon('plus') + '新会话</button>' +
       '</div>' +
     '</section>' +
-    (running ? '<section class="running-card view-enter">' +
-      '<div class="running-top"><span class="dot pulse"></span>正在运行</div>' +
-      '<div class="running-title">' + esc(running.title) + '</div>' +
-      '<div class="running-meta"><span>正在生成会话页</span><span class="faint">·</span><span>第 2 步 / 共 4 步</span></div>' +
-      '<div class="running-foot"><div class="progress"><i></i></div><button class="btn-ghost" data-action="open-chat" data-id="' + running.id + '">查看</button></div>' +
-    '</section>' : '') +
+    (running ? (() => {
+      const stats = running.raw?.projections?.values?.sessionStats || {};
+      const step = stats.steps ? '第 ' + stats.steps + ' 步' : '实时同步';
+      return '<section class="running-card view-enter">' +
+        '<div class="running-top"><span class="dot pulse"></span>正在运行</div>' +
+        '<div class="running-title">' + esc(running.title) + '</div>' +
+        '<div class="running-meta"><span>' + esc(running.snippet) + '</span><span class="faint">·</span><span>' + esc(step) + '</span></div>' +
+        '<div class="running-foot"><div class="progress"><i></i></div><button class="btn-ghost" data-action="open-chat" data-id="' + running.id + '">查看</button></div>' +
+      '</section>';
+    })() : '') +
     '<section class="section">' +
       '<div class="section-head"><h2>最近会话<span class="count">' + state.sessions.length + '</span></h2><a class="text-btn" href="#/sessions">全部</a></div>' +
       '<div class="session-list">' + state.sessions.slice(0, 3).map(sessionItem).join('') + '</div>' +
@@ -154,29 +180,41 @@ function renderSessions() {
 
 /* ── 会话页 ───────────────────────────────────────────────────── */
 function renderMessage(m) {
-  if (m.role === 'user') {
-    return '<div class="msg user"><div class="bubble">' + esc(m.text).replace(/\n/g, '<br>') + '</div></div>';
+  const role = m.role || m.kind;
+  if (role === 'user') {
+    const pending = m.pending ? '<span class="msg-state">发送中</span>' : m.failed ? '<span class="msg-state err">发送失败</span>' : '';
+    return '<div class="msg user' + (m.failed ? ' failed' : '') + '"><div class="bubble">' + esc(m.text).replace(/\n/g, '<br>') + pending + '</div></div>';
   }
-  if (m.role === 'assistant') {
+  if (role === 'assistant') {
+    const reasoning = m.reasoning ? '<details class="reasoning"><summary>' + icon('spark', 'sm') + '思考过程</summary><div>' + esc(m.reasoning).replace(/\n/g, '<br>') + '</div></details>' : '';
     return '<div class="msg assistant"><div class="who">' + mark() + 'DSH<span style="margin-left:auto;font-weight:500">' + esc(m.time) + '</span></div>' +
-      '<div class="prose">' + prose(m.text) + '</div></div>';
+      reasoning + '<div class="prose">' + prose(m.text) + (m.live ? '<span class="live-cursor"></span>' : '') + '</div></div>';
   }
-  if (m.role === 'tool') {
+  if (role === 'tool') {
+    const state = m.status === 'running' ? 'run' : m.status === 'error' ? 'err' : '';
+    const stateText = m.status === 'running' ? '运行中' : m.status === 'error' ? '失败' : '已完成';
+    const stateIcon = m.status === 'running' ? '' : m.status === 'error' ? icon('x', 'sm') : icon('check', 'sm');
+    const output = m.output ? '<details class="tool-fold"' + (m.status === 'error' ? ' open' : '') + '><summary>' + icon('code', 'sm') + '查看输出</summary><div class="tool-body">' + esc(m.output) + '</div></details>' : '';
     return '<div class="tool-card"><div class="tool-head"><span class="tool-ico">' + icon('tool') + '</span>' +
       '<div class="grow"><div class="tool-name">' + esc(m.name) + '</div><div class="tool-desc">' + esc(m.desc) + '</div></div>' +
-      '<span class="tool-status ' + (m.status === 'running' ? 'run' : '') + '">' + (m.status === 'running' ? '运行中' : icon('check', 'sm')) + (m.status === 'running' ? '' : '已完成') + '</span></div>' +
-      (m.output ? '<div class="tool-body">' + esc(m.output) + '</div>' : '') +
-      '<div class="tool-foot">' + icon('code', 'sm') + '点击展开完整输出<span style="margin-left:auto">' + esc(m.time) + '</span></div></div>';
+      '<span class="tool-status ' + state + '">' + stateIcon + stateText + '</span></div>' +
+      output + '<div class="tool-foot">' + esc(m.time) + '</div></div>';
   }
-  if (m.role === 'approval') {
-    return '<div class="approval-card" data-approval="' + m.key + '">' +
-      '<div class="approval-strip"><span class="dot amber"></span>等待审批</div>' +
+  if (role === 'approval') {
+    const pending = m.status === 'pending';
+    const title = pending ? '等待审批' : m.status === 'allowed' ? '已允许一次' : m.status === 'cancelled' ? '审批已取消' : '已拒绝';
+    const cls = pending ? '' : m.status === 'allowed' ? ' done' : ' muted-card';
+    return '<div class="approval-card' + cls + '" data-approval="' + esc(m.key) + '">' +
+      '<div class="approval-strip"><span class="dot ' + (pending ? 'amber' : m.status === 'allowed' ? '' : 'red') + '"></span>' + title + '</div>' +
       '<div class="approval-body"><div class="approval-title">工具 <b>' + esc(m.tool) + '</b> 请求越权执行</div>' +
       '<div class="approval-reason">' + esc(m.reason) + '</div></div>' +
-      '<div class="approval-actions">' +
-        '<button class="btn ghost grow-btn" data-action="reject" data-key="' + m.key + '">拒绝</button>' +
-        '<button class="btn primary grow-btn" data-action="allow" data-key="' + m.key + '">允许一次</button>' +
-      '</div></div>';
+      (pending ? '<div class="approval-actions">' +
+        '<button class="btn ghost grow-btn" data-action="reject" data-key="' + esc(m.key) + '">拒绝</button>' +
+        '<button class="btn primary grow-btn" data-action="allow" data-key="' + esc(m.key) + '">允许一次</button>' +
+      '</div>' : '') + '</div>';
+  }
+  if (role === 'notice') {
+    return '<div class="notice ' + (m.tone === 'error' ? 'err' : '') + '">' + icon(m.tone === 'error' ? 'x' : 'spark', 'sm') + '<span>' + esc(m.text) + '</span></div>';
   }
   return '';
 }
@@ -197,11 +235,13 @@ function prose(text) {
 }
 function renderChat(id) {
   const c = state.chat;
-  return '<div class="chat-view view-enter">' +
+  const running = c.running !== false;
+  const statusText = c.statusText || (running ? '正在运行' : '已同步');
+  return '<div class="chat-view view-enter" data-session-id="' + esc(id) + '">' +
     '<header class="chat-header">' +
       '<a class="icon-btn" href="#/sessions" aria-label="返回">' + icon('back') + '</a>' +
       '<div class="chat-head-main"><h1 class="truncate">' + esc(c.title) + '</h1>' +
-        '<p><span class="dot pulse"></span>正在运行 · 2 个工具调用</p></div>' +
+        '<p><span class="dot ' + (running ? 'pulse' : '') + '"></span>' + esc(statusText) + '</p></div>' +
       '<button class="icon-btn" data-action="chat-menu" aria-label="更多">' + icon('more') + '</button>' +
     '</header>' +
     '<div class="chat-scroll" id="chat-scroll"><div class="chat-inner">' +
@@ -290,7 +330,20 @@ function render() {
   state.route = parseRoute();
   const app = $('#app');
   if (state.route.name === 'chat') {
-    app.innerHTML = renderChat(state.route.id);
+    const id = state.route.id;
+    if (id.startsWith('session-')) {
+      if (live.currentSessionId !== id) {
+        openRealChat(id);
+        return;
+      }
+      if (live.timeline) syncFromTimeline();
+    } else if (live.currentSessionId) {
+      closeFollow();
+      live.currentSessionId = '';
+      live.timeline = null;
+      state.chat = JSON.parse(JSON.stringify(demoChatSnapshot));
+    }
+    app.innerHTML = renderChat(id);
     document.body.classList.add('chat-mode');
     requestAnimationFrame(() => {
       const sc = $('#chat-scroll');
@@ -307,6 +360,395 @@ function render() {
     app.innerHTML = html;
     bindCommon();
   }
+}
+
+/* ── 真实 DSH 数据 ───────────────────────────────────────────── */
+const demoChatSnapshot = JSON.parse(JSON.stringify(state.chat));
+
+function relTime(ts) {
+  return formatRelative(ts);
+}
+function snippetOf(item, running) {
+  const values = item?.projections?.values || {};
+  const outline = Array.isArray(values.turnOutline) ? values.turnOutline : [];
+  const last = outline[outline.length - 1];
+  let text = String(last?.prompt || last?.response || '').replace(/\s+/g, ' ').trim();
+  if (!text) text = values.sessionListMetadata?.blank ? '空白会话' : running ? '运行中 · 点击查看最新进度' : '已结束';
+  return text.slice(0, 90);
+}
+function mapSession(item) {
+  const summary = sessionSummary(item);
+  return {
+    id: summary.id,
+    title: summary.title,
+    snippet: snippetOf(item, summary.running),
+    time: relTime(summary.updatedAt),
+    status: summary.running ? 'running' : 'done',
+    cwd: summary.cwd,
+    icon: summary.running ? 'spark' : summary.blank ? 'plus' : 'check',
+    real: true,
+    raw: item,
+  };
+}
+function applySessionList(items) {
+  live.sessionList = (items || []).map(sessionSummary);
+  state.sessions = (items || []).map(mapSession);
+  const running = state.sessions.filter((s) => s.status === 'running');
+  state.activity.running = running.map((s) => ({
+    id: s.id,
+    title: s.title,
+    sub: s.snippet,
+    time: s.time,
+  }));
+  state.activity.done = state.sessions.filter((s) => s.status !== 'running').slice(0, 5).map((s) => ({
+    id: s.id,
+    title: s.title,
+    sub: s.time + ' · 已完成',
+    time: s.time,
+  }));
+}
+async function refreshSessions() {
+  const data = await api.listSessions();
+  applySessionList(data?.items || []);
+  live.ready = true;
+  state.connected = true;
+  if (state.route.name === 'chat') {
+    const current = state.sessions.find((s) => s.id === live.currentSessionId);
+    if (current && (!state.chat.title || state.chat.title === '会话')) {
+      state.chat.title = current.title;
+      state.chat.running = current.status === 'running';
+      if (live.timeline) live.timeline.title = current.title;
+      schedulePaint();
+    }
+    return;
+  }
+  render();
+}
+function loadSessionTitle(id) {
+  api.rpc('session/projections', { request: { sessionId: id } }).then((value) => {
+    const title = value?.values?.title;
+    if (title && live.currentSessionId === id) {
+      if (live.timeline) live.timeline.title = title;
+      state.chat.title = title;
+      schedulePaint();
+    }
+  }).catch(() => {});
+}
+let sessionRefreshTimer = null;
+function scheduleSessionRefresh() {
+  if (sessionRefreshTimer) return;
+  sessionRefreshTimer = setTimeout(() => {
+    sessionRefreshTimer = null;
+    refreshSessions().catch(() => {});
+  }, 400);
+}
+
+function schedulePaint() {
+  if (live.renderQueued) return;
+  live.renderQueued = true;
+  requestAnimationFrame(() => {
+    live.renderQueued = false;
+    paintChat();
+  });
+}
+function messageTime(ms) {
+  try { return new Date(ms).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+}
+function itemToLegacy(item, index) {
+  const time = messageTime(item.time);
+  if (item.kind === 'user') return { role: 'user', id: item.id, text: item.text, time };
+  if (item.kind === 'assistant') return { role: 'assistant', id: item.id, text: item.text, reasoning: item.reasoning, time };
+  if (item.kind === 'tool') return { role: 'tool', id: item.id, name: item.name, desc: item.desc, status: item.status, output: item.output, time };
+  if (item.kind === 'approval') return { role: 'approval', key: item.key, tool: item.tool, reason: item.reason, status: item.status, time };
+  if (item.kind === 'notice') return { role: 'notice', tone: item.tone, text: item.text, time };
+  return null;
+}
+function syncFromTimeline() {
+  if (!live.timeline) return;
+  const tl = live.timeline;
+  state.chat.title = tl.title || state.chat.title;
+  state.chat.running = tl.running;
+  const toolCount = tl.items.filter((i) => i.kind === 'tool').length;
+  const streaming = live.stream && live.stream.text.trim();
+  state.chat.statusText = tl.running ? (streaming ? '正在生成…' : '正在运行' + (toolCount ? ' · ' + toolCount + ' 个工具' : '')) : '已同步';
+  for (const opt of [...live.optimistic]) {
+    if (tl.items.some((i) => i.kind === 'user' && i.text === opt.text)) {
+      live.optimistic = live.optimistic.filter((x) => x !== opt);
+    }
+  }
+  const items = tl.items.map(itemToLegacy).filter(Boolean);
+  if (live.stream && live.stream.text.trim()) {
+    items.push({ role: 'assistant', id: 'stream', text: live.stream.text, reasoning: '', time: hm, live: true });
+  }
+  state.chat.messages = items.concat(live.optimistic);
+  schedulePaint();
+}
+function handleStreamFrame(frame) {
+  if (!frame) return;
+  try {
+    if (localStorage.getItem('pocket-debug') === '1') console.debug('[pocket-stream]', frame.type, frame.chunk?.type || '', frame.chunk?.text || '');
+  } catch { /* ignore */ }
+  if (frame.type === 'start') {
+    live.stream = { attemptId: frame.attemptId, turn: frame.turn, step: frame.step, text: '', reasoning: '', active: true };
+    schedulePaint();
+    return;
+  }
+  if (!live.stream) {
+    if (frame.type !== 'chunk') return;
+    live.stream = { attemptId: frame.attemptId || 'stream', turn: 0, step: 0, text: '', reasoning: '', active: true };
+  }
+  if (frame.attemptId && live.stream.attemptId && frame.attemptId !== live.stream.attemptId) {
+    live.stream = { attemptId: frame.attemptId, turn: frame.turn || 0, step: frame.step || 0, text: '', reasoning: '', active: true };
+  }
+  if (frame.type === 'chunk') {
+    const chunk = frame.chunk || {};
+    if (chunk.type === 'text-delta' || chunk.type === 'text') {
+      live.stream.text += chunk.text || '';
+      syncFromTimeline();
+    } else if (chunk.type === 'reasoning-delta') {
+      live.stream.reasoning += chunk.text || '';
+    } else if (chunk.type === 'block-start' && chunk.blockType === 'text') {
+      live.stream.active = true;
+      syncFromTimeline();
+    }
+    return;
+  }
+  if (frame.type === 'end') {
+    live.stream.active = false;
+  }
+}
+function paintChat() {
+  if (state.route.name !== 'chat') return;
+  const inner = $('.chat-inner');
+  const sc = $('#chat-scroll');
+  if (!inner) return;
+  const head = $('.chat-head-main h1');
+  if (head && state.chat.title) head.textContent = state.chat.title;
+  const status = $('.chat-head-main p');
+  if (status) {
+    status.innerHTML = '<span class="dot ' + (state.chat.running ? 'pulse' : '') + '"></span>' + esc(state.chat.statusText || (state.chat.running ? '正在运行' : '已同步'));
+  }
+  const near = !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 140);
+  const streaming = live.stream && live.stream.text.trim();
+  const typing = state.chat.running && !streaming
+    ? '<div class="msg assistant"><div class="who">' + mark() + 'DSH<span style="margin-left:auto;font-weight:500">' + hm + '</span></div><div class="prose"><span class="typing"><i></i><i></i><i></i></span></div></div>'
+    : '';
+  const visible = state.chat.messages.slice(-14);
+  inner.innerHTML = '<div class="day-divider">今天 ' + hm + '</div>' + visible.map(renderMessage).join('') + typing;
+  if (near && sc) sc.scrollTop = sc.scrollHeight;
+}
+function closeFollow() {
+  if (live.follow) {
+    try { live.follow.close(); } catch { /* ignore */ }
+  }
+  live.follow = null;
+}
+function scheduleFollowReconnect() {
+  if (live.currentSessionId !== state.route.id) return;
+  if (live.reconnectTimer) return;
+  state.chat.statusText = '连接中断，正在重连…';
+  schedulePaint();
+  const delay = Math.min(2000, 500 * Math.pow(2, live.reconnectAttempt++));
+  live.reconnectTimer = setTimeout(() => {
+    live.reconnectTimer = null;
+    if (live.currentSessionId !== state.route.id) return;
+    closeFollow();
+    openRealChat(state.route.id);
+  }, delay);
+}
+function openRealChat(id) {
+  if (live.currentSessionId === id && live.follow) return;
+  closeFollow();
+  live.currentSessionId = id;
+  live.reconnectAttempt = 0;
+  if (live.reconnectTimer) { clearTimeout(live.reconnectTimer); live.reconnectTimer = null; }
+  const summary = live.sessionList.find((s) => s.id === id);
+  const listed = state.sessions.find((s) => s.id === id);
+  state.chat = {
+    title: summary?.title || listed?.title || '会话',
+    running: listed?.status === 'running',
+    statusText: '正在同步…',
+    messages: [],
+  };
+  live.timeline = new Timeline({ onChange: syncFromTimeline });
+  if (!summary) loadSessionTitle(id);
+  live.follow = api.followSession(id, {
+    onSnapshot: (value) => {
+      live.reconnectAttempt = 0;
+      live.stream = null;
+      const title = value.projections?.values?.title || summary?.title || state.chat.title;
+      live.timeline.title = title;
+      live.timeline.reset(value.records || [], value.cursor, {
+        running: state.chat.running,
+        title,
+      });
+      state.chat.title = title;
+      if (!value.projections?.values?.title) loadSessionTitle(id);
+      syncFromTimeline();
+    },
+    onEvent: (event) => {
+      if (event.type === 'assistant/message' || event.type === 'turn/end') live.stream = null;
+      live.timeline.apply(event);
+      if (event.type === 'session/title' && live.timeline.title) state.chat.title = live.timeline.title;
+      if (event.type === 'turn/end') scheduleSessionRefresh();
+    },
+    onAssistantStream: (frame) => handleStreamFrame(frame),
+    onError: () => scheduleFollowReconnect(),
+    onClose: () => scheduleFollowReconnect(),
+  });
+  render();
+}
+function linkApprovals() {
+  if (!live.timeline) return;
+  const pending = [...live.pending.values()];
+  for (const item of live.timeline.items) {
+    if (item.kind !== 'approval' || item.status !== 'pending') continue;
+    const match = pending.find((p) => (p.callId && p.callId === item.callId) || (!p.callId && p.tool === item.tool));
+    if (match) item.eventId = match.eventId;
+  }
+}
+async function answerApproval(key, outcome) {
+  if (!live.ready) return false;
+  const item = live.timeline?.items.find((i) => i.kind === 'approval' && i.key === key) || null;
+  let pending = item?.eventId ? live.pending.get(item.eventId) : null;
+  if (!pending && item?.callId) pending = [...live.pending.values()].find((p) => p.callId === item.callId) || null;
+  if (!pending) pending = [...live.pending.values()].find((p) => p.tool === item?.tool) || null;
+  if (!pending) {
+    toast('审批已由电脑端处理，正在刷新');
+    return true;
+  }
+  try {
+    await api.answerEvent(live.eventsClientId || pending.clientId, pending.eventId, { kind: 'result', value: outcome });
+    live.pending.delete(pending.eventId);
+    state.activity.pending = state.activity.pending.filter((x) => x.eventId !== pending.eventId && x.id !== pending.eventId);
+    if (item) {
+      item.status = outcome === 'allowed-once' ? 'allowed' : 'rejected';
+      item.outcome = outcome;
+    }
+    live.pending.forEach((p) => { /* keep */ });
+    syncFromTimeline();
+    if (state.route.name === 'activity' || state.route.name === 'home') render();
+    haptic(14);
+    toast(outcome === 'allowed-once' ? '已允许一次，任务继续' : '已拒绝，已通知 DSH');
+    return true;
+  } catch (error) {
+    toast('审批失败：' + (error?.message || '未知错误'));
+    return true;
+  }
+}
+function openEventsStream() {
+  if (live.eventStream) return;
+  live.eventStream = api.openEvents({
+    onReady: (value) => { live.eventsClientId = value.clientId; },
+    onWaterfall: (value) => {
+      if (value.event !== 'approval/request') return;
+      const request = value.request || {};
+      const eventId = value.eventId;
+      const callId = request.callId || '';
+      const tool = request.toolName || '工具';
+      const reason = request.reason || request.displayReason || '等待你的决定';
+      if (live.pending.has(eventId)) return;
+      const pending = { eventId, clientId: live.eventsClientId, tool, reason, callId, at: Date.now() };
+      live.pending.set(eventId, pending);
+      const key = callId || eventId;
+      if (!state.activity.pending.some((x) => x.id === key || x.eventId === eventId)) {
+        state.activity.pending.unshift({
+          id: key,
+          key,
+          eventId,
+          tool,
+          title: '工具 ' + tool + ' 请求越权执行',
+          sub: reason,
+          time: '刚刚',
+          session: 'DSH 会话',
+        });
+      }
+      linkApprovals();
+      if (state.route.name === 'activity' || state.route.name === 'home') render();
+      else if (state.route.name === 'chat') schedulePaint();
+      haptic(16);
+    },
+    onEmit: (value) => {
+      if (value.event && value.event.startsWith('api-session/')) scheduleSessionRefresh();
+    },
+    onCancel: (value) => {
+      live.pending.delete(value.eventId);
+      state.activity.pending = state.activity.pending.filter((x) => x.eventId !== value.eventId);
+      if (state.route.name === 'activity') render();
+    },
+    onClose: () => {
+      live.eventStream = null;
+      if (live.ready) setTimeout(openEventsStream, 3000);
+    },
+    onError: () => { /* close handler reconnects */ },
+  });
+}
+async function createNewChat() {
+  if (!live.ready) { location.hash = '#/chat/s1'; return; }
+  try {
+    const created = await api.createSession({});
+    await refreshSessions();
+    location.hash = '#/chat/' + created.sessionId;
+  } catch (error) {
+    toast('新建会话失败：' + (error?.message || '未知错误'));
+  }
+}
+async function reconnectNow() {
+  state.connected = false;
+  if (state.route.name === 'home') render();
+  try {
+    const health = await api.health();
+    state.version = health.version || state.version;
+    state.connected = true;
+    await refreshSessions();
+    openEventsStream();
+    live.ready = true;
+    if (live.currentSessionId) {
+      closeFollow();
+      openRealChat(live.currentSessionId);
+    }
+    toast('已重新连接');
+  } catch (error) {
+    state.connected = false;
+    if (state.route.name === 'home') render();
+    toast('连接失败：' + (error?.message || '未知错误'));
+  }
+}
+
+async function bootstrap() {
+  try {
+    const health = await api.health();
+    state.version = health.version || '';
+    await refreshSessions();
+    openEventsStream();
+    live.ready = true;
+    const view = state.route.name;
+    if (view === 'home' || view === 'sessions' || view === 'activity') render();
+  } catch (error) {
+    live.demo = true;
+    state.connected = false;
+    console.warn('[Pocket] 未连接 DSH，使用演示数据：', error?.message || error);
+    if (state.route.name === 'home') render();
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    state.connected = true;
+    refreshSessions().catch(() => {});
+    if (live.currentSessionId === state.route.id) scheduleFollowReconnect();
+  });
+  window.addEventListener('offline', () => {
+    state.connected = false;
+    if (state.route.name === 'home') render();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (live.ready) refreshSessions().catch(() => {});
+    if (live.currentSessionId === state.route.id) scheduleFollowReconnect();
+  });
+  window.addEventListener('pageshow', () => {
+    if (live.ready) refreshSessions().catch(() => {});
+  });
 }
 
 /* ── 交互 ─────────────────────────────────────────────────────── */
@@ -378,6 +820,21 @@ function sendChat() {
   input.value = '';
   input.style.height = 'auto';
   haptic();
+  if (live.ready && live.currentSessionId && live.currentSessionId.startsWith('session-')) {
+    const optimistic = { id: 'local-' + Date.now(), role: 'user', time: hm, text, pending: true };
+    live.optimistic.push(optimistic);
+    syncFromTimeline();
+    api.prompt(live.currentSessionId, text, { mode: live.mode || 'queue' }).then(() => {
+      optimistic.pending = false;
+      syncFromTimeline();
+    }).catch((error) => {
+      optimistic.pending = false;
+      optimistic.failed = true;
+      syncFromTimeline();
+      toast('发送失败：' + (error?.message || '未知错误'));
+    });
+    return;
+  }
   addChatMessage({ id: 'u' + Date.now(), role: 'user', time: hm, text });
   const typing = $('#typing-row');
   if (typing) typing.style.display = '';
@@ -385,16 +842,29 @@ function sendChat() {
   if (sc) sc.scrollTop = sc.scrollHeight;
   setTimeout(() => {
     if (typing) typing.style.display = 'none';
-    addChatMessage({ id: 'a' + Date.now(), role: 'assistant', time: hm, text: '收到。这条消息已经进入同步队列；等真实 API 接上后，这里会直接显示 DSH 的流式输出。\n\n现在可以先继续打磨界面：你更在意 **首页的信息密度**，还是 **会话页的滚动手感**？' });
+    addChatMessage({ id: 'a' + Date.now(), role: 'assistant', time: hm, text: '这是演示数据。连接电脑上的 DSH 后，这里会显示真实回复。' });
     haptic(12);
-  }, 1100);
+  }, 900);
 }
-function sendHome() {
+async function sendHome() {
   const input = $('#home-input');
   const text = input ? input.value.trim() : '';
-  toast(text ? '已创建新会话，正在进入…' : '说说你想做什么');
+  if (!text) { toast('说说你想做什么'); return; }
   haptic();
-  setTimeout(() => { location.hash = '#/chat/s1'; }, 450);
+  if (!live.ready) {
+    toast('演示模式：连接 DSH 后即可创建真实会话');
+    setTimeout(() => { location.hash = '#/chat/s1'; }, 450);
+    return;
+  }
+  try {
+    toast('正在创建会话…');
+    const created = await api.createSession({});
+    await api.prompt(created.sessionId, text);
+    await refreshSessions();
+    location.hash = '#/chat/' + created.sessionId;
+  } catch (error) {
+    toast('创建失败：' + (error?.message || '未知错误'));
+  }
 }
 function toggle(key) {
   state.settings[key] = !state.settings[key];
@@ -419,13 +889,21 @@ function onAction(action, el) {
     if (input) { input.value = el.dataset.text || ''; input.focus(); }
     return;
   }
-  if (action === 'new-chat' || action === 'open-chat') {
+  if (action === 'new-chat') {
     haptic();
-    location.hash = action === 'open-chat' ? '#/chat/' + el.dataset.id : '#/chat/s1';
+    createNewChat();
+    return;
+  }
+  if (action === 'open-chat') {
+    haptic();
+    location.hash = '#/chat/' + el.dataset.id;
     return;
   }
   if (action === 'allow' || action === 'reject') {
     const key = el.dataset.key;
+    const outcome = action === 'allow' ? 'allowed-once' : 'rejected';
+    const real = live.ready && (live.pending.size > 0 || (live.timeline && live.timeline.items.some((i) => i.kind === 'approval' && i.key === key)));
+    if (real) { answerApproval(key, outcome); return; }
     state.chat.messages.forEach(m => { if (m.role === 'approval' && m.key === key) m.answered = true; });
     state.activity.pending = state.activity.pending.filter(x => x.id !== key);
     haptic(14);
@@ -443,12 +921,31 @@ function onAction(action, el) {
     return;
   }
   if (action === 'connection') {
-    state.connected = !state.connected;
-    render();
-    toast(state.connected ? '已重新连接' : '连接已断开，正在重试…');
+    reconnectNow();
     return;
   }
-  if (action === 'resync') { toast('已重新同步 · 0 条遗漏'); return; }
+  if (action === 'resync') {
+    reconnectNow();
+    return;
+  }
+  if (action === 'stop-chat') {
+    if (live.ready && live.currentSessionId) {
+      haptic(14);
+      api.cancelSession(live.currentSessionId).then(() => toast('已请求停止')).catch((error) => toast('停止失败：' + (error?.message || '未知错误')));
+    } else {
+      toast('演示模式：连接 DSH 后可停止任务');
+    }
+    return;
+  }
+  if (action === 'mode') {
+    live.mode = live.mode === 'steer' ? 'queue' : 'steer';
+    toast(live.mode === 'steer' ? '下一条将作为引导发送' : '下一条将排队发送');
+    return;
+  }
+  if (action === 'model' || action === 'attach') {
+    toast(action === 'model' ? '模型选择将在 v0.4 接入' : '附件上传将在 v0.4 接入');
+    return;
+  }
   if (action === 'jump') {
     const sc = $('#chat-scroll'); if (sc) sc.scrollTo({ top: sc.scrollHeight, behavior: 'smooth' });
     return;
@@ -493,3 +990,10 @@ window.addEventListener('hashchange', render);
 /* 启动 */
 document.documentElement.dataset.theme = state.theme;
 render();
+bootstrap();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* http LAN 下可能失败 */ });
+  });
+}

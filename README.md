@@ -6,8 +6,9 @@
 > **Pocket 是 DSH 的伴生 App，不是另一个聊天机器人。**
 > 它不重新实现 Agent，只消费 DSH 的 Session / 事件流 / 审批 API。
 
-> 状态：**v0.3 — 高保真 UI 原型**。
-> 真实 API 接入、离线恢复和 Android 打包正在进行。当前版本适合看设计与交互，不建议当作日常主力使用。
+> 状态：**v0.4-dev — 真实 DSH 会话已接通**。
+> 会话列表、快照 + WebSocket 增量、发消息、停止、token 级流式输出都已验证；
+> Android 打包、配对引导与系统通知还在进行。
 
 ![首页](docs/assets/pocket-home.png)
 ![会话](docs/assets/pocket-chat.png)
@@ -33,16 +34,21 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 3. **恢复优先**：切后台、断网、隧道重连后自动重新 follow，不整页刷新。
 4. **审批就地完成**：approval/request 直接出现在消息流和活动中心，一次点击结案。
 
-## 当前能力（v0.3）
+## 当前能力（v0.4-dev）
 
 - 首页 / 会话 / 活动 / 设置四栏，底部 Tab + 新会话 FAB
-- 会话页消息流：用户气泡、助手 Markdown、工具卡片、审批卡片
-- 交互原型：发送、审批、主题切换、触感、Toast、底部弹层
+- 真实 DSH 数据：session/list、session/create、session/follow、session/prompt、session/cancel
+- 快照 + WebSocket 增量合并，按 seq 去重，断线自动重开 follow
+- token 级流式输出（reasoning 不刷屏，正文逐字出现）
+- 工具卡片折叠、审批卡片、运行状态、自动标题
+- 过滤 runtime-context / skill-catalog / time-context 等注入消息，只显示人类消息
 - 深色 / 浅色主题、安全区、减少动效、键盘适配
 - PWA manifest / Service Worker / 离线壳
-- 响应式：390×844 参考尺寸，兼容更小与更宽屏幕
+- Gateway 新增 `/__dshapp/` 静态路由，可直接从公网 HTTPS 地址安装 PWA
+- 网关 39 项单测通过
 
-**还没接真实数据**：当前 app.js 使用 mock 数据。下一步直接对接 gateway 后面的 DSH API。
+**还在进行**：审批 waterfall 的端到端真机验证、配对引导页、系统通知、Capacitor Android 打包。
+当前 app.js 在没有设备 cookie 时会回退到演示数据，方便看设计。
 
 ## 架构
 
@@ -70,7 +76,8 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 node .\scripts\serve-app.mjs .\app 8788
 ~~~
 
-打开 <http://127.0.0.1:8788/>。这是纯前端 mock，不会连接 DSH。
+打开 <http://127.0.0.1:8788/>。预览服务器会把 `/api` 和 `/__dshm` 代理到本机 8470 网关：
+如果浏览器已经配对，会显示真实会话；没有设备 cookie 时回退到演示数据。
 
 ## 安装到 DSH（现有网关）
 
@@ -81,7 +88,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 ~~~
 
 配对与公网入口见 [docs/remote-domain.md](docs/remote-domain.md)。
-当前 App 仍是独立静态目录，gateway 接入会在 v0.4 完成。
+重启 DSH 后，手机打开 **https://你的地址/__dshapp/** 即可使用 Pocket 并安装到主屏幕。
+完整的桌面 UI 仍在根路径，高级功能（终端、文件树）可以继续走桌面 UI。
 
 ## 开发
 
