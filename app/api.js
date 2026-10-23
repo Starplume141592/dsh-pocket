@@ -22,8 +22,7 @@ export function apiBase() {
   return '';
 }
 
-export function wsUrl(path) {
-  const base = apiBase();
+export function wsUrl(path, base = apiBase()) {
   if (base) {
     const u = new URL(base);
     u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -32,6 +31,7 @@ export function wsUrl(path) {
     u.hash = '';
     return u.href;
   }
+  if (typeof location === 'undefined') throw new Error('wsUrl: no base or location');
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return proto + '//' + location.host + path;
 }
@@ -147,7 +147,7 @@ export class PocketApi {
 
   openStream(endpoint, args, handlers = {}) {
     const streamId = uuid();
-    const socket = new this.WebSocketImpl(wsUrl('/api/remote.mux'));
+    const socket = new this.WebSocketImpl(wsUrl('/api/remote.mux', this.base));
     let opened = false;
     let closed = false;
     const close = () => {

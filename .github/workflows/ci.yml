@@ -40,6 +40,13 @@ jobs:
       - name: Validate PWA manifest
         run: node -e "JSON.parse(require('fs').readFileSync('../app/manifest.webmanifest','utf8'))"
 
+      - name: App transport and timeline tests
+        working-directory: .
+        run: >
+          node --test --test-isolation=none --test-force-exit
+          tests/app/api.test.mjs
+          tests/app/timeline.test.mjs
+
       - name: Gateway tests
         run: >
           node --test --test-isolation=none --test-force-exit

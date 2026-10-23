@@ -45,7 +45,7 @@ Pocket 的解法不是继续给桌面 UI 打补丁，而是：
 - 深色 / 浅色主题、安全区、减少动效、键盘适配
 - PWA manifest / Service Worker / 离线壳
 - Gateway 新增 `/__dshapp/` 静态路由，可直接从公网 HTTPS 地址安装 PWA
-- 网关 39 项单测通过
+- 网关 39 项单测 + App 14 项传输/时间线测试通过
 
 **还在进行**：审批 waterfall 的端到端真机验证、配对引导页、系统通知、Capacitor Android 打包。
 当前 app.js 在没有设备 cookie 时会回退到演示数据，方便看设计。

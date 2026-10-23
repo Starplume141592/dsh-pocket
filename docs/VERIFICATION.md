@@ -48,12 +48,19 @@ node --test --test-isolation=none --test-force-exit \
   tests/gateway.test.mjs tests/plugin.test.mjs tests/net.test.mjs \
   tests/store.test.mjs tests/tunnel.test.mjs tests/notify.test.mjs
 
-tests 39
-pass 39
+tests 39 + 14 (app)
+pass 53
 fail 0
 ~~~
 
-新增覆盖：
+App 传输/时间线测试覆盖：
+
+- RPC envelope、错误结果、prompt 幂等 requestId、$events/result
+- session/follow 的 mux open 帧与 snapshot/event/assistant-stream 路由
+- 注入消息过滤、assistant 文本 + 工具调用合并、tool/result 状态
+- 审批 asked/decided、seq 去重、snapshot reset、gap 检测
+
+网关新增覆盖：
 
 - /__dshapp/ 外壳可访问（未配对也可打开）
 - /__dshapp 重定向到 /__dshapp/
