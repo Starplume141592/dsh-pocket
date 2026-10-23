@@ -1,0 +1,5 @@
+# dsh-mobile — bundle patch：插入手机网关插件。
+# 端口/公网域名等设置可以在 Web UI「设置 → 连接手机」里改，不必改这里。
+- insert:
+    - id: dsh-mobile
+      name: 'dsh-mobile'

@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dsh-mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dsh-mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Syntax check app shell
+        run: node --check ../app/app.js
+
+      - name: Validate PWA manifest
+        run: node -e "JSON.parse(require('fs').readFileSync('../app/manifest.webmanifest','utf8'))"
+
+      - name: Gateway tests
+        run: >
+          node --test --test-isolation=none --test-force-exit
+          tests/gateway.test.mjs
+          tests/plugin.test.mjs
+          tests/net.test.mjs
+          tests/store.test.mjs
+          tests/tunnel.test.mjs
+          tests/notify.test.mjs

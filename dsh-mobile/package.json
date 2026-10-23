@@ -1,0 +1,36 @@
+{
+  "name": "dsh-mobile",
+  "version": "0.2.0",
+  "private": true,
+  "description": "DSH 手机端：一键配对、远程网关、可安装 PWA（代理完整 Web UI）",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

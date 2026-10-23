@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+
+# Local runtime state and secrets
+.dev-dshhome/
+.npm-cache/
+*.local
+.env
+.env.*
+!.env.example
+
+# Development-only extraction of the installed DSH app (proprietary; never publish)
+research/
+PROGRESS.md
+asar-*.mjs
+
+# Local tooling and test artifacts
+tools/
+*.log
+*.pid
+.tmp-edge*/
+.edge-profile/
+coverage/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Android build output (Capacitor)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
