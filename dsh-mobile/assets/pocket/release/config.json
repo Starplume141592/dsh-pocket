@@ -1,0 +1,21 @@
+{
+  "version": "0.4.1",
+  "channel": "dev",
+  "publicUrl": "https://pocket.taila66dc2.ts.net",
+  "appPath": "/__dshapp/",
+  "apkUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/v0.4.1/Pocket-0.4.1-debug.apk",
+  "repoUrl": "https://github.com/Starplume141592/dsh-pocket",
+  "updatedAt": "2026-10-23T16:00:00Z",
+  "entryHint": "稳定 Funnel 入口，HTTPS 证书已签发；换入口只需改这个 config.json。",
+  "notes": [
+    "APK 远程启动：UI 从网关加载，更新服务器资源即可热更",
+    "设置里可检查更新，读取本发布页的 version / apkUrl",
+    "PWA SW 新版本就绪后自动提示/刷新",
+    "离线快照 120 条消息 / 300 KB / 12 个会话，断网可翻页",
+    "加载更早：每页 10 / 20 / 40 条，保持滚动位置",
+    "主题色（4 种）、紧凑模式、活动页显隐",
+    "移动端总开关：随时停/启网关、通知、隧道",
+    "审批、token 流式、系统通知、PWA 安装",
+    "Android debug APK（app.pocket.dsh 0.4.1）"
+  ]
+}

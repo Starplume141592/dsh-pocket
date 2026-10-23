@@ -13,6 +13,7 @@
 
 > 发布页（GitHub Pages 启用后）：<https://Starplume141592.github.io/dsh-pocket/releases/>
 > 发版、热更新与仓库初始化见 [RELEASE.md](RELEASE.md)。
+> GitHub Pages 打不开时用 DSH 镜像：<https://pocket.taila66dc2.ts.net/__dshapp/release/>
 
 ![首页](docs/assets/pocket-home.png)
 ![会话](docs/assets/pocket-chat.png)

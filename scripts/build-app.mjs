@@ -17,6 +17,15 @@ function copy(from, to) {
   }
 }
 copy(src, dest);
+const releaseSrc = path.join(root, 'docs', 'releases');
+if (fs.existsSync(releaseSrc)) {
+  const releaseDest = path.join(dest, 'release');
+  fs.mkdirSync(releaseDest, { recursive: true });
+  for (const name of ['index.html', 'config.json']) {
+    const from = path.join(releaseSrc, name);
+    if (fs.existsSync(from)) fs.copyFileSync(from, path.join(releaseDest, name));
+  }
+}
 const files = fs.readdirSync(dest);
 console.log('Pocket assets ->', dest);
 console.log(files.join(', '));

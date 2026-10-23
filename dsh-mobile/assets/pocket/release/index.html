@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pocket · DSH 随行 — 下载与发布</title>
+  <meta name="description" content="Pocket 是 DeepSeek Harness 的手机伴生 App：会话、流式输出、审批、离线快照。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%235b7cff'/%3E%3Cpath d='M32 14l4 12 12 4-12 4-4 12-4-12-12-4 12-4z' fill='white'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #07080b;
+      --surface: #12151c;
+      --surface-2: #171b24;
+      --line: rgba(255,255,255,.09);
+      --text: #f4f6fb;
+      --muted: #9aa4b6;
+      --faint: #687184;
+      --blue: #5b7cff;
+      --violet: #8b5cff;
+      --green: #3ddc97;
+      --amber: #ffb454;
+      --radius: 22px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono: ui-monospace, "Cascadia Code", Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 var(--font);
+      -webkit-font-smoothing: antialiased;
+      background-image: radial-gradient(900px 520px at 18% -8%, rgba(91,124,255,.28), transparent 62%),
+                        radial-gradient(700px 480px at 92% 12%, rgba(139,92,255,.16), transparent 60%);
+      min-height: 100dvh;
+    }
+    a { color: #aebcff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 40px 20px 64px; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 34px; }
+    .mark {
+      width: 42px; height: 42px; border-radius: 13px; flex: none;
+      background: linear-gradient(145deg, #6b8cff, #5b3cff 70%);
+      box-shadow: 0 8px 24px rgba(91,91,255,.38), inset 0 1px 0 rgba(255,255,255,.35);
+      display: grid; place-items: center; font-size: 22px;
+    }
+    .brand-name { font-size: 18px; font-weight: 750; letter-spacing: -.02em; }
+    .brand-sub { font-size: 11.5px; color: var(--faint); margin-top: -2px; }
+    .badge {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line);
+      background: rgba(255,255,255,.03); color: var(--muted); font-size: 11.5px; font-weight: 600;
+    }
+    .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px rgba(61,220,151,.7); }
+    .hero h1 { margin: 0; font-size: clamp(34px, 8vw, 54px); line-height: 1.08; letter-spacing: -.05em; font-weight: 800; }
+    .hero h1 span { background: linear-gradient(100deg, #aebcff, #8b5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero p { margin: 16px 0 0; max-width: 56ch; color: var(--muted); font-size: 15px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 8px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 18px; border-radius: 13px; border: 1px solid var(--line);
+      background: var(--surface); color: var(--text); font-size: 14px; font-weight: 650;
+      cursor: pointer; text-decoration: none;
+    }
+    .btn:hover { border-color: rgba(255,255,255,.24); text-decoration: none; }
+    .btn.primary {
+      background: linear-gradient(135deg, var(--blue), var(--violet));
+      border-color: transparent; box-shadow: 0 12px 30px rgba(91,92,255,.28);
+    }
+    .btn.small { padding: 8px 12px; font-size: 12.5px; border-radius: 10px; }
+    .meta { color: var(--faint); font-size: 12px; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; margin-top: 30px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } .wrap { padding: 26px 16px 48px; } }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.24);
+    }
+    .card h2 { margin: 0 0 4px; font-size: 15px; letter-spacing: -.01em; }
+    .card .sub { color: var(--faint); font-size: 12px; margin-bottom: 14px; }
+    .urlbox {
+      display: flex; gap: 8px; align-items: center; padding: 10px 12px;
+      background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px;
+      font-family: var(--mono); font-size: 12px; color: #cdd6ff; word-break: break-all;
+    }
+    .urlbox span { flex: 1; min-width: 0; }
+    .steps { counter-reset: step; display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .steps li { counter-increment: step; position: relative; padding-left: 34px; color: var(--muted); font-size: 13px; }
+    .steps li::before {
+      content: counter(step); position: absolute; left: 0; top: 0;
+      width: 22px; height: 22px; border-radius: 8px; display: grid; place-items: center;
+      background: rgba(91,124,255,.15); border: 1px solid rgba(91,124,255,.3);
+      color: #aebcff; font: 700 11px/1 var(--font);
+    }
+    .steps b { color: var(--text); font-weight: 650; }
+    .notes { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+    .notes li { margin: 3px 0; }
+    .footer { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 30px; color: var(--faint); font-size: 11.5px; }
+    .footer a { color: var(--muted); }
+    .copy-ok { color: var(--green); }
+    .warn { color: var(--amber); font-size: 12px; margin-top: 8px; }
+    code { font-family: var(--mono); font-size: 12px; background: rgba(255,255,255,.06); padding: 1px 5px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="mark">✦</div>
+      <div>
+        <div class="brand-name">Pocket</div>
+        <div class="brand-sub">DSH 随行 · 下载与发布</div>
+      </div>
+      <div class="badge"><span class="dot"></span><span id="version">v0.4.1-dev</span></div>
+    </header>
+
+    <section class="hero">
+      <h1>把电脑上的 <span>DSH</span><br>带到手机。</h1>
+      <p>看长任务进度、在消息流里直接批准工具、继续对话、断网也能看上次快照。Pocket 是 DSH 的伴生 App，不重新实现 Agent。</p>
+      <div class="actions">
+        <a class="btn primary" id="apk" href="#">下载 Android APK</a>
+        <a class="btn" id="open" href="#">打开 Pocket</a>
+        <a class="btn" id="repo" href="#" rel="noopener">GitHub 仓库</a>
+      </div>
+      <div class="meta" id="meta">正在读取发布配置…</div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>当前公网入口</h2>
+        <div class="sub">手机和电脑必须能访问同一个地址；换地址后需要在 App 里重新填写。</div>
+        <div class="urlbox"><span id="publicUrl">—</span><button class="btn small" id="copy">复制</button></div>
+        <p class="warn" id="entryHint"></p>
+        <h2 style="margin-top:20px">第一次连接</h2>
+        <ol class="steps">
+          <li><b>在电脑上打开 DSH</b> → 设置 → 连接手机，生成配对二维码。</li>
+          <li><b>手机打开上面的地址</b> → 扫码配对 → 批准后进入 Pocket。</li>
+          <li><b>安装到主屏幕</b>（PWA）或装 Android APK；下次直接从图标打开。</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>这个版本有什么</h2>
+        <div class="sub">v0.4.1-dev · Android debug</div>
+        <ul class="notes" id="notes">
+          <li>离线快照 120 条消息，断网可翻页</li>
+          <li>加载更早 / 每页 10·20·40 条</li>
+          <li>主题色、紧凑模式、活动页显隐</li>
+          <li>移动端总开关，随时停/启网关</li>
+          <li>审批、流式输出、系统通知</li>
+        </ul>
+        <p class="meta" style="margin-top:14px">APK 是 debug 签名，仅用于测试；正式发布前会换 release 签名。</p>
+      </section>
+    </div>
+
+    <div class="footer">
+      <span>MIT License</span>
+      <span>·</span>
+      <a href="https://github.com/Starplume141592/dsh-pocket/blob/main/docs/product/APP_SPEC.md" rel="noopener">产品规格</a>
+      <a href="https://github.com/Starplume141592/dsh-pocket/blob/main/docs/product/SYNC.md" rel="noopener">同步模型</a>
+      <a href="https://github.com/Starplume141592/dsh-pocket/blob/main/docs/product/PLUGINS.md" rel="noopener">插件与扩展</a>
+      <a href="https://pocket.taila66dc2.ts.net/__dshapp/release/" rel="noopener">DSH 镜像</a>
+      <span style="margin-left:auto" id="updated"></span>
+    </div>
+  </div>
+
+  <script>
+    (async function () {
+      var cfg = null;
+      try {
+        var res = await fetch('./config.json', { cache: 'no-store' });
+        if (res.ok) cfg = await res.json();
+      } catch (error) { /* 本地 file:// 预览时没有 fetch，使用默认值 */ }
+      cfg = cfg || {};
+      var version = cfg.version || '0.4.1-dev';
+      var publicUrl = String(cfg.publicUrl || '').replace(/\/+$/, '');
+      var appPath = cfg.appPath || '/__dshapp/';
+      var appUrl = publicUrl ? publicUrl + appPath : '';
+      document.getElementById('version').textContent = 'v' + version;
+      document.getElementById('publicUrl').textContent = publicUrl || '未配置（运行 scripts/release.ps1 生成）';
+      document.getElementById('apk').href = cfg.apkUrl || '#';
+      document.getElementById('open').href = appUrl || '#';
+      document.getElementById('repo').href = cfg.repoUrl || '#';
+      document.getElementById('meta').textContent = cfg.channel ? ('channel: ' + cfg.channel + ' · ' + (cfg.updatedAt ? new Date(cfg.updatedAt).toLocaleString('zh-CN') : '')) : '本地预览';
+      document.getElementById('updated').textContent = cfg.updatedAt ? ('更新于 ' + new Date(cfg.updatedAt).toLocaleString('zh-CN')) : '';
+      if (cfg.notes && cfg.notes.length) {
+        document.getElementById('notes').innerHTML = cfg.notes.map(function (n) { return '<li>' + String(n).replace(/[<>&]/g, '') + '</li>'; }).join('');
+      }
+      if (cfg.entryHint) document.getElementById('entryHint').textContent = cfg.entryHint;
+      document.getElementById('copy').addEventListener('click', async function () {
+        if (!publicUrl) return;
+        try {
+          await navigator.clipboard.writeText(publicUrl);
+          var b = document.getElementById('copy');
+          b.textContent = '已复制';
+          b.classList.add('copy-ok');
+          setTimeout(function () { b.textContent = '复制'; b.classList.remove('copy-ok'); }, 1600);
+        } catch (error) {
+          window.prompt('复制这个地址', publicUrl);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
