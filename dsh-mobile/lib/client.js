@@ -788,6 +788,7 @@ window.__ModuleLoader__.load({
                   h("div", { className: "__dm_code" }, pairing.code || "------"),
                   h("div", { className: "__dm_hint" }, t("qrHint")),
                   h("div", { className: "__dm_hint" }, t("expires").replace("{t}", clockLeft(pairing.expiresAt))),
+                  qrSrc ? h("a", { className: "__dm_hint", href: qrSrc, target: "_blank", rel: "noopener" }, "二维码打不开？新窗口打开") : null,
                   h("div", { className: "__dm_row" },
                     h("div", { className: "__dm_url" }, pairing.url),
                     h("button", { type: "button", className: "__dm_btn", onClick: function () { copyLink(pairing.url); } }, copied ? t("copied") : t("copy")),

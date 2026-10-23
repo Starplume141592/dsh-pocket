@@ -478,21 +478,32 @@ function renderConnect(error) {
   return '<div class="connect-view view-enter">' +
     '<div class="connect-hero">' + mark('lg') +
       '<p class="connect-eyebrow">POCKET · DSH 随行</p>' +
-      '<h1>连接你的 <span class="grad">DSH</span></h1>' +
-      '<p class="connect-sub">输入电脑上的公网地址。第一次使用需要在电脑端 DSH → 设置 → 连接手机里批准这台设备。</p>' +
+      '<h1>3 步连上你的 <span class="grad">DSH</span></h1>' +
+      '<p class="connect-sub">Pocket 需要电脑上的 DSH 先装「连接手机」插件。装好后扫码配对，之后就能在手机上看会话、批准工具。</p>' +
+    '</div>' +
+    '<div class="connect-steps">' +
+      '<div class="connect-step"><span class="n">1</span><div><b>电脑端装好插件</b><p>DSH → 设置 → 连接手机；没有这张卡片，先装电脑端安装包。</p></div></div>' +
+      '<div class="connect-step"><span class="n">2</span><div><b>扫码或粘贴配对链接</b><p>用手机系统相机扫电脑上的二维码；也可以把二维码下面的链接粘贴到下面。</p></div></div>' +
+      '<div class="connect-step"><span class="n">3</span><div><b>在电脑上批准</b><p>核对 6 位配对码，点「批准」，手机会自动进入。</p></div></div>' +
     '</div>' +
     '<div class="connect-form">' +
+      '<label class="field"><span>配对链接（推荐）</span>' +
+        '<input id="connect-pair" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/__dshm/pair?t=…"></label>' +
+      '<button class="btn primary connect-submit" data-action="connect-pair">' + icon('bolt', 'sm') + '打开配对链接</button>' +
+      '<div class="connect-divider"><span>或手动输入地址</span></div>' +
       '<label class="field"><span>DSH 地址</span>' +
-        '<input id="connect-url" type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://laptop.xxx.ts.net" value="' + esc(saved) + '">' +
-      '</label>' +
-      (error ? '<div class="connect-error">' + icon('x', 'sm') + '<span>' + esc(error) + '</span></div>' : '') +
-      '<button class="btn primary connect-submit" data-action="connect">' + icon('bolt', 'sm') + '连接</button>' +
+        '<input id="connect-url" type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://laptop.xxx.ts.net" value="' + esc(saved) + '"></label>' +
+      '<div id="connect-error" class="connect-error"' + (error ? '' : ' style="display:none"') + '>' + icon('x', 'sm') + '<span>' + esc(error || '') + '</span></div>' +
+      '<div class="connect-row">' +
+        '<button class="btn ghost" data-action="test-connect">测试连接</button>' +
+        '<button class="btn primary" data-action="connect">连接</button>' +
+      '</div>' +
       '<div class="connect-help"><span class="dot"></span>连接后，这台手机上的会话、审批与电脑端保持同步。</div>' +
     '</div>' +
     '<div class="connect-foot">' +
-      '<button class="text-btn" data-action="demo">先看看界面</button>' +
+      '<button class="text-btn" data-action="install-host">电脑端还没装插件？</button>' +
       '<span class="faint">·</span>' +
-      '<button class="text-btn" data-action="help">怎么找到地址？</button>' +
+      '<button class="text-btn" data-action="help">地址是什么？</button>' +
     '</div>' +
   '</div>';
 }
@@ -500,24 +511,73 @@ function renderPairingNeeded() {
   return '<div class="connect-view view-enter">' +
     '<div class="connect-hero">' + mark('lg') +
       '<p class="connect-eyebrow">POCKET · DSH 随行</p>' +
-      '<h1>还差一步</h1>' +
-      '<p class="connect-sub">这台设备还没有和电脑配对。请在电脑上打开 DSH → 设置 → 连接手机，生成二维码或配对链接。</p>' +
+      '<h1>在电脑上批准</h1>' +
+      '<p class="connect-sub">这台手机已经到达配对页。电脑上打开 DSH → 设置 → 连接手机，会看到 6 位配对码；核对后点「批准」。</p>' +
     '</div>' +
     '<div class="connect-form">' +
-      '<button class="btn primary connect-submit" data-action="retry">已配对，重新连接</button>' +
+      '<button class="btn primary connect-submit" data-action="retry">已批准，重新连接</button>' +
       '<button class="btn ghost connect-submit" data-action="desktop">打开完整桌面 UI</button>' +
-      '<div class="connect-help"><span class="dot amber"></span>配对必须在电脑端批准，二维码 5 分钟内有效。</div>' +
+      '<div class="connect-help"><span class="dot amber"></span>批准后会自动进入；二维码 5 分钟内有效。</div>' +
     '</div>' +
     '<div class="connect-foot"><span class="faint">Pocket 不会接触 DSH 的启动令牌</span></div>' +
   '</div>';
 }
-async function submitConnect() {
+function setConnectError(message) {
+  const box = $('#connect-error');
+  if (!box) return;
+  const text = box.querySelector('span');
+  if (text) text.textContent = message || '';
+  box.style.display = message ? '' : 'none';
+}
+function pairTarget(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    if (!/^https?:$/.test(url.protocol)) return '';
+    if (url.pathname.includes('/__dshm/pair')) return url.href;
+    if (url.pathname.includes('/__dshapp')) return url.origin + '/__dshapp/';
+    return '';
+  } catch {
+    return '';
+  }
+}
+function submitPairLink() {
+  const value = $('#connect-pair')?.value || '';
+  const target = pairTarget(value);
+  if (!target) {
+    setConnectError('请粘贴电脑二维码下面的完整配对链接（https://…/__dshm/pair?t=…）');
+    return;
+  }
+  location.replace(target);
+}
+async function testConnection() {
   const input = $('#connect-url');
-  const base = normalizeBase(input?.value || '');
-  if (!base) { toast('请输入 DSH 地址'); return; }
-  try { localStorage.setItem('pocket-base', base); } catch { /* ignore */ }
-  toast('正在打开 ' + base + '…');
-  location.replace(base + '/__dshapp/');
+  const base = normalizeBase(input?.value || '').replace(/\/__dshapp\/?$/i, '');
+  if (!base) { setConnectError('请先填 DSH 地址'); return; }
+  setConnectError('');
+  try {
+    const res = await fetch(base + '/__dshm/health', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(7000),
+    });
+    if (res.status === 404) throw new Error('这个地址没有连接手机网关：电脑端插件可能没装、没启动，或地址填错了');
+    if (!res.ok) throw new Error('电脑端返回 HTTP ' + res.status);
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw new Error('电脑端网关还没就绪');
+    try { localStorage.setItem('pocket-base', base); } catch { /* ignore */ }
+    toast('连接正常，正在打开…');
+    location.replace(base + '/__dshapp/');
+  } catch (error) {
+    if (error && error.name === 'TimeoutError') {
+      setConnectError('连接超时：检查手机网络，或确认这个地址能在浏览器打开');
+    } else {
+      setConnectError(error?.message || '连接失败');
+    }
+  }
+}
+function submitConnect() {
+  return testConnection();
 }
 
 /* ── 真实 DSH 数据 ───────────────────────────────────────────── */
@@ -1368,6 +1428,10 @@ async function checkForUpdate() {
   }
 }
 function handleSheet(action) {
+  if (action === 'install-host') {
+    window.open('https://pocket.taila66dc2.ts.net/__dshapp/release/', '_blank', 'noopener');
+    return;
+  }
   if (action === 'theme-dark' || action === 'theme-light' || action === 'theme-system') {
     state.theme = action === 'theme-light' ? 'light' : 'dark';
     localStorage.setItem('pocket-theme', state.theme);
@@ -1392,6 +1456,12 @@ function handleSheet(action) {
 }
 function onAction(action, el) {
   if (action === 'connect') return submitConnect();
+  if (action === 'connect-pair') return submitPairLink();
+  if (action === 'test-connect') return testConnection();
+  if (action === 'install-host') {
+    window.open('https://pocket.taila66dc2.ts.net/__dshapp/release/', '_blank', 'noopener');
+    return;
+  }
   if (action === 'check-update') { checkForUpdate(); return; }
   if (action === 'pref-accent') {
     openSheet('主题色', '选一个强调色，立即生效', ACCENTS.map((accent) => ({
@@ -1437,9 +1507,10 @@ function onAction(action, el) {
   if (action === 'retry') return reconnectNow();
   if (action === 'desktop') { location.href = '/'; return; }
   if (action === 'help') {
-    openSheet('怎么找到地址', '在电脑上打开 DSH → 设置 → 连接手机，复制「公网地址」或 Tailscale Funnel 地址。', [
-      { action: 'about', icon: 'shield', title: '需要先配对', sub: '地址填对后，手机仍要经过电脑批准' },
-      { action: 'about', icon: 'bolt', title: '必须 HTTPS', sub: '局域网 HTTP 只建议在可信网络使用' },
+    openSheet('地址与配对', '推荐在电脑上打开 DSH → 设置 → 连接手机 → 生成配对二维码，用手机系统相机扫。二维码下面的配对链接也可以直接粘贴到连接页。', [
+      { action: 'install-host', icon: 'plus', title: '电脑端没有「连接手机」', sub: '先装 PocketHost 电脑端安装包' },
+      { action: 'about', icon: 'shield', title: '需要先在电脑批准', sub: '二维码 5 分钟内有效' },
+      { action: 'about', icon: 'bolt', title: '必须是 HTTPS 地址', sub: '局域网 HTTP 只建议在可信网络使用' },
     ]);
     return;
   }

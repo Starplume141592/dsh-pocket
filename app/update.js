@@ -2,7 +2,7 @@
  * No DOM; safe to unit-test in Node.
  */
 
-export const APP_VERSION = '0.4.1';
+export const APP_VERSION = '0.4.2';
 export const RELEASE_CONFIG_URL = 'https://Starplume141592.github.io/dsh-pocket/releases/config.json';
 
 export function normalizeBase(value) {

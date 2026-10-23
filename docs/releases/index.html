@@ -108,37 +108,52 @@
         <div class="brand-name">Pocket</div>
         <div class="brand-sub">DSH 随行 · 下载与发布</div>
       </div>
-      <div class="badge"><span class="dot"></span><span id="version">v0.4.1-dev</span></div>
+      <div class="badge"><span class="dot"></span><span id="version">v0.4.2-dev</span></div>
     </header>
 
     <section class="hero">
       <h1>把电脑上的 <span>DSH</span><br>带到手机。</h1>
       <p>看长任务进度、在消息流里直接批准工具、继续对话、断网也能看上次快照。Pocket 是 DSH 的伴生 App，不重新实现 Agent。</p>
       <div class="actions">
-        <a class="btn primary" id="apk" href="#">下载 Android APK</a>
+        <a class="btn primary" id="start" href="#setup">先装电脑端</a>
+        <a class="btn" id="apk" href="#">下载 Android APK</a>
         <a class="btn" id="open" href="#">打开 Pocket</a>
         <a class="btn" id="repo" href="#" rel="noopener">GitHub 仓库</a>
       </div>
       <div class="meta" id="meta">正在读取发布配置…</div>
     </section>
 
+    <section class="card" id="setup" style="margin-top:24px;border-color:rgba(91,124,255,.38)">
+      <div class="sub">第 0 步 · 电脑端（Windows）</div>
+      <h2>先装「连接手机」插件</h2>
+      <p class="sub" style="margin:8px 0 14px">Pocket 不是独立聊天 App。电脑上的 DSH 必须先装 dsh-mobile 插件，手机才能打开会话、审批和输入框。没装插件时，手机打开地址只会 404。</p>
+      <div class="urlbox"><span id="installCmd">irm https://starplume141592.github.io/dsh-pocket/install.ps1 | iex</span><button class="btn small" id="copyInstall">复制命令</button></div>
+      <div class="actions" style="margin:14px 0 0">
+        <a class="btn primary" id="hostZip" href="https://github.com/Starplume141592/dsh-pocket/releases/latest/download/PocketHost.zip" rel="noopener">下载电脑端安装包</a>
+        <a class="btn" id="hostMirror" href="https://pocket.taila66dc2.ts.net/__dshapp/release/PocketHost.zip" rel="noopener">镜像下载</a>
+        <a class="btn" id="hostHelp" href="https://github.com/Starplume141592/dsh-pocket/blob/main/RELEASE.md" rel="noopener">手动安装说明</a>
+      </div>
+      <p class="warn">在 PowerShell 里运行上面的命令，装完完全退出 DSH 再重新打开；设置里才会出现「连接手机」。macOS / Linux 请先看手动安装说明。</p>
+    </section>
+
     <div class="grid">
       <section class="card">
         <h2>当前公网入口</h2>
-        <div class="sub">手机和电脑必须能访问同一个地址；换地址后需要在 App 里重新填写。</div>
+        <div class="sub">下面是作者自己的实例，不是公共服务。装完插件后，你的 DSH 设置里会生成自己的地址。</div>
         <div class="urlbox"><span id="publicUrl">—</span><button class="btn small" id="copy">复制</button></div>
         <p class="warn" id="entryHint"></p>
         <h2 style="margin-top:20px">第一次连接</h2>
         <ol class="steps">
-          <li><b>在电脑上打开 DSH</b> → 设置 → 连接手机，生成配对二维码。</li>
-          <li><b>手机打开上面的地址</b> → 扫码配对 → 批准后进入 Pocket。</li>
+          <li><b>电脑端装插件</b> → 重启 DSH，设置 → 连接手机。</li>
+          <li><b>打开总开关</b> → 选公网入口 → 生成配对二维码。</li>
+          <li><b>手机用系统相机扫码</b>（或粘贴配对链接）→ 在电脑上核对配对码并批准。</li>
           <li><b>安装到主屏幕</b>（PWA）或装 Android APK；下次直接从图标打开。</li>
         </ol>
       </section>
 
       <section class="card">
         <h2>这个版本有什么</h2>
-        <div class="sub">v0.4.1-dev · Android debug</div>
+        <div class="sub">v0.4.2-dev · Android debug</div>
         <ul class="notes" id="notes">
           <li>离线快照 120 条消息，断网可翻页</li>
           <li>加载更早 / 每页 10·20·40 条</li>
@@ -169,15 +184,31 @@
         if (res.ok) cfg = await res.json();
       } catch (error) { /* 本地 file:// 预览时没有 fetch，使用默认值 */ }
       cfg = cfg || {};
-      var version = cfg.version || '0.4.1-dev';
+      var version = cfg.version || '0.4.2-dev';
       var publicUrl = String(cfg.publicUrl || '').replace(/\/+$/, '');
       var appPath = cfg.appPath || '/__dshapp/';
       var appUrl = publicUrl ? publicUrl + appPath : '';
       document.getElementById('version').textContent = 'v' + version;
       document.getElementById('publicUrl').textContent = publicUrl || '未配置（运行 scripts/release.ps1 生成）';
-      document.getElementById('apk').href = cfg.apkUrl || '#';
+      document.getElementById('apk').href = cfg.apkMirrorUrl || cfg.apkUrl || '#';
       document.getElementById('open').href = appUrl || '#';
       document.getElementById('repo').href = cfg.repoUrl || '#';
+      var installCommand = cfg.installCommand || 'irm https://starplume141592.github.io/dsh-pocket/install.ps1 | iex';
+      document.getElementById('installCmd').textContent = installCommand;
+      document.getElementById('hostZip').href = cfg.hostUrl || 'https://github.com/Starplume141592/dsh-pocket/releases/latest/download/PocketHost.zip';
+      document.getElementById('hostMirror').href = cfg.hostMirrorUrl || 'https://pocket.taila66dc2.ts.net/__dshapp/release/PocketHost.zip';
+      if (cfg.hostHelpUrl) document.getElementById('hostHelp').href = cfg.hostHelpUrl;
+      document.getElementById('copyInstall').addEventListener('click', async function () {
+        try {
+          await navigator.clipboard.writeText(installCommand);
+          var b = document.getElementById('copyInstall');
+          b.textContent = '已复制';
+          b.classList.add('copy-ok');
+          setTimeout(function () { b.textContent = '复制命令'; b.classList.remove('copy-ok'); }, 1600);
+        } catch (error) {
+          window.prompt('复制安装命令', installCommand);
+        }
+      });
       document.getElementById('meta').textContent = cfg.channel ? ('channel: ' + cfg.channel + ' · ' + (cfg.updatedAt ? new Date(cfg.updatedAt).toLocaleString('zh-CN') : '')) : '本地预览';
       document.getElementById('updated').textContent = cfg.updatedAt ? ('更新于 ' + new Date(cfg.updatedAt).toLocaleString('zh-CN')) : '';
       if (cfg.notes && cfg.notes.length) {

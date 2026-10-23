@@ -143,23 +143,23 @@ App 传输/时间线/缓存/偏好/更新测试覆盖：
 
 `sw.js` 为 `pocket-shell-v7`；安装副本 `prefs.js` 返回 200。
 
-## 5.5 Android debug APK（23:47）
+## 5.5 Android debug APK（00:20）
 
 ~~~text
 node scripts/build-mobile-web.mjs
 npx cap sync android
 tools\gradle\gradle-8.14.3\bin\gradle.bat assembleDebug --no-daemon
 => BUILD SUCCESSFUL in 19s
-=> app-debug.apk 4,152,786 bytes
+=> app-debug.apk 4,154,294 bytes
 
 aapt2 badging:
   package app.pocket.dsh
-  versionCode 2 / versionName 0.4.1 / minSdk 24 / targetSdk 36
+  versionCode 3 / versionName 0.4.2 / minSdk 24 / targetSdk 36
 assets/public/{app,update,cache,prefs,timeline}.js 已打进 APK
 ~~~
 
 产物：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
-（另一份 `dist/Pocket-0.4.1-debug.apk`，不提交）。
+（另一份 `dist/Pocket-0.4.2-debug.apk`，不提交）。
 
 ## 5.6 公网入口与配对（23:30 / 证书 23:37 签发）
 
@@ -191,6 +191,21 @@ assets/public/{app,update,cache,prefs,timeline}.js 已打进 APK
 - 发布页 `config.json` 已升到 0.4.1，APK 资产名 `Pocket-0.4.1-debug.apk`。
 - 测试：新增 `tests/app/update.test.mjs` 3 项；总 **84/84**。
 - 限制：原生壳（图标/权限/Capacitor）仍需重装；debug 签名必须一致才能覆盖安装。
+
+## 5.8 新手引导与电脑端安装包（00:30）
+
+- **电脑端 PocketHost.zip**：插件 + tsnet sidecar + cloudflared + install/uninstall，
+  26.7 MB；在临时 DSH_HOME 里实测安装成功（插件目录、patch、bin 都对）。
+- 一键命令（Funnel 优先，GitHub 兜底）：
+  `irm https://pocket.taila66dc2.ts.net/__dshapp/release/install.ps1 | iex`
+- 发布页新增「第 0 步：先装电脑端」，明确没有插件手机只会 404；
+  Funnel 镜像现在同时托管发布页、`PocketHost.zip` 和 0.4.2 APK。
+- 手机连接页改成 3 步引导：电脑准备 → 扫码/粘贴配对链接 → 电脑批准；
+  支持「测试连接」区分 404（插件没装）和超时/网络错误。
+- **二维码 403 根因**：卡片 POST 在 Electron/自定义协议下可能不带 Origin，
+  之前只放行 `null`；现在 loopback 的无 Origin 和 file/app 协议也放行，
+  并加了「二维码打不开？新窗口打开」兜底。
+- 新增测试不在 84 项之外（沿用 gateway 的 Origin 测试）。
 
 ## 6. 已知问题
 

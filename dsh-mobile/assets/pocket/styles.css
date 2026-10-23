@@ -497,8 +497,8 @@ svg { display: block; }
 .connect-view {
   min-height: 100dvh;
   padding: calc(var(--safe-top) + 42px) 24px calc(28px + var(--safe-bottom));
-  display: flex; flex-direction: column; justify-content: center; gap: 28px;
-  max-width: 520px; margin: 0 auto;
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 22px;
+  max-width: 520px; margin: 0 auto; overflow-y: auto;
 }
 .connect-hero .mark.lg { width: 64px; height: 64px; border-radius: 20px; margin-bottom: 20px; }
 .connect-hero .mark.lg svg { width: 30px; height: 30px; }
@@ -507,6 +507,15 @@ svg { display: block; }
 .connect-hero h1 .grad { background: linear-gradient(100deg, var(--blue-2), var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .connect-sub { margin: 14px 0 0; color: var(--muted); font-size: 14px; line-height: 1.65; max-width: 36ch; }
 .connect-form { display: flex; flex-direction: column; gap: 12px; }
+.connect-steps { display: grid; gap: 8px; }
+.connect-step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 13px; background: var(--surface); border: 1px solid var(--line); }
+.connect-step .n { flex: none; width: 21px; height: 21px; border-radius: 7px; display: grid; place-items: center; background: rgba(91,124,255,.14); border: 1px solid rgba(91,124,255,.3); color: var(--blue-2); font: 700 11px/1 var(--font); }
+.connect-step b { display: block; font-size: 13px; color: var(--text); }
+.connect-step p { margin: 2px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+.connect-row { display: flex; gap: 8px; }
+.connect-row .btn { flex: 1; height: 46px; }
+.connect-divider { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 11px; margin: 2px 0; }
+.connect-divider::before, .connect-divider::after { content: ''; height: 1px; flex: 1; background: var(--line); }
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field > span { color: var(--faint); font-size: 11.5px; font-weight: 650; letter-spacing: .03em; padding-left: 4px; }
 .field input {

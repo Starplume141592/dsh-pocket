@@ -458,6 +458,18 @@ test('配对、代理、PWA 注入、WS 与吊销', async (t) => {
       });
       assert.equal(res.status, 200, origin);
     }
+    const noOrigin = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    assert.equal(noOrigin.status, 200, 'no origin');
+    const fileOrigin = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'file://' },
+      body: '{}',
+    });
+    assert.equal(fileOrigin.status, 200, 'file origin');
   });
 
   await t.test('吊销设备后立即失效', async () => {

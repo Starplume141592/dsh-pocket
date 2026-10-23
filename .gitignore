@@ -26,6 +26,8 @@ flclash-backup/
 .edge-profile/
 coverage/
 dist/
+dsh-mobile/assets/pocket/release/PocketHost.zip
+dsh-mobile/assets/pocket/release/Pocket-0.4.2-debug.apk
 build/
 
 # OS / editor

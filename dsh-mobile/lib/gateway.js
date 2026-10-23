@@ -312,14 +312,17 @@ export function createMobileGateway({
   function isDesktopRequest(req) {
     if (!isLoopbackAddress(req.socket.remoteAddress ?? '')) return false;
     const origin = req.headers.origin;
-    if (!origin) return req.method === 'GET' || req.method === 'HEAD';
-    // Plugin cards may run in a sandboxed iframe: Origin is either "null"
-    // or another loopback port. Loopback + the DSH auth cookie is the trust boundary.
+    // The Electron/plugin bridge may omit Origin entirely for same-origin POSTs.
+    // Loopback + the DSH auth cookie is the trust boundary for this desktop API.
+    if (!origin) return true;
     if (origin === 'null') return true;
     const allowed = new Set([upstream.origin, upstream.origin.replace('127.0.0.1', 'localhost')]);
     if (allowed.has(origin)) return true;
     try {
-      const host = new URL(origin).hostname;
+      const url = new URL(origin);
+      // file://, app://, dsh:// and other desktop shells are not web origins.
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
+      const host = url.hostname;
       return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
     } catch {
       return false;

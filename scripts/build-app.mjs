@@ -25,6 +25,12 @@ if (fs.existsSync(releaseSrc)) {
     const from = path.join(releaseSrc, name);
     if (fs.existsSync(from)) fs.copyFileSync(from, path.join(releaseDest, name));
   }
+  const installer = path.join(root, 'docs', 'install.ps1');
+  if (fs.existsSync(installer)) fs.copyFileSync(installer, path.join(releaseDest, 'install.ps1'));
+  const hostZip = path.join(root, 'dist', 'PocketHost.zip');
+  if (fs.existsSync(hostZip)) fs.copyFileSync(hostZip, path.join(releaseDest, 'PocketHost.zip'));
+  const apk = path.join(root, 'dist', 'Pocket-0.4.2-debug.apk');
+  if (fs.existsSync(apk)) fs.copyFileSync(apk, path.join(releaseDest, 'Pocket-0.4.2-debug.apk'));
 }
 const files = fs.readdirSync(dest);
 console.log('Pocket assets ->', dest);
