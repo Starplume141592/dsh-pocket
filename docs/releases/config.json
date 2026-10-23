@@ -10,9 +10,9 @@
     "去掉二维码、Funnel 和公网地址依赖，只走 tailnet",
     "更新提示、发布页和更新公告接入应用内检查"
   ],
-  "apkUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/native-test/DSHRemote.apk",
+  "apkUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/v0.5.0/DSHRemote.apk",
   "apkMirrorUrl": "https://pocket.taila66dc2.ts.net/__dshapp/release/DSHRemote.apk",
-  "hostUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/native-test/PocketHost.zip",
+  "hostUrl": "https://github.com/Starplume141592/dsh-pocket/releases/download/v0.5.0/PocketHost.zip",
   "hostMirrorUrl": "https://pocket.taila66dc2.ts.net/__dshapp/release/PocketHost.zip",
   "installCommand": "irm https://raw.githubusercontent.com/Starplume141592/dsh-pocket/main/docs/install.ps1 | iex",
   "releasePage": "https://pocket.taila66dc2.ts.net/__dshapp/release/",
